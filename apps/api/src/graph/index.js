@@ -1,4 +1,4 @@
-// LangGraph wiring ONLY. Node logic lives in nodes/, prompts in agents/.
+// LangGraph wiring ONLY. Node logic lives in nodes/, prompts in prompts/.
 //
 // TODO: build the StateGraph over graphStateSchema
 // TODO: ingest -> extractRequirements -> classifyRequirements -> parseRubric
