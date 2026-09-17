@@ -5,7 +5,9 @@
 // whole dossier; this optimises for precision on the single question that decides
 // the verdict. That is the discreet page-47 clause the jury tests for.
 
-import { classifyRequirement } from '../../agents/classifier.agent.js';
+import ClassifierAgent from '../../agents/classifier.agent.js';
+
+const classifier = new ClassifierAgent();
 import { logger } from '../../lib/logger.js';
 import RequirementRepository from '../../repositories/requirement.repository.js';
 
@@ -30,7 +32,7 @@ export async function classifyRequirements(state) {
       const requirement = queue.shift();
       if (!requirement) return;
       try {
-        const result = await classifyRequirement(requirement);
+        const result = await classifier.classify(requirement);
         if (result.obligation !== requirement.obligation) {
           reclassified += 1;
           await requirementsRepo.updateObligation(requirement.id, result.obligation);

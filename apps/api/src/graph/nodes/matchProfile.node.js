@@ -1,6 +1,8 @@
 // Qualifier, step 1: confront every requirement with the company profile.
 
-import { matchRequirements } from '../../agents/matcher.agent.js';
+import MatcherAgent from '../../agents/matcher.agent.js';
+
+const matcher = new MatcherAgent();
 import CompanyRepository from '../../repositories/company.repository.js';
 
 const companies = new CompanyRepository();
@@ -29,7 +31,7 @@ export async function matchProfile(state) {
   }
 
   try {
-    const { matches } = await matchRequirements(state.requirements, { profile, references, team });
+    const { matches } = await matcher.match(state.requirements, { profile, references, team });
     logger.info(
       {
         matched: matches.length,

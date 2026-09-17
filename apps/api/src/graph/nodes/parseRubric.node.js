@@ -3,7 +3,9 @@
 // The rubric is rows, never constants: each dossier scores differently, and the
 // elimination threshold that decides a no-go lives in its grid, not in our code.
 
-import { extractRubric } from '../../agents/extractor.agent.js';
+import ExtractorAgent from '../../agents/extractor.agent.js';
+
+const extractor = new ExtractorAgent();
 import RequirementRepository from '../../repositories/requirement.repository.js';
 
 const requirementsRepo = new RequirementRepository();
@@ -23,7 +25,7 @@ export async function parseRubric(state) {
   }
 
   try {
-    const { criteria } = await extractRubric(readable.sort((a, b) => a.page - b.page));
+    const { criteria } = await extractor.extractRubric(readable.sort((a, b) => a.page - b.page));
 
     await requirementsRepo.deleteRubricByTender(state.tenderId);
     await requirementsRepo.insertRubric(

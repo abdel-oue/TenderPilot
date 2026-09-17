@@ -5,7 +5,9 @@
 // the same call, and per-document keeps sourceDocumentId knowable without the
 // model having to guess it.
 
-import { extractRequirements as runExtractor } from '../../agents/extractor.agent.js';
+import ExtractorAgent from '../../agents/extractor.agent.js';
+
+const extractor = new ExtractorAgent();
 import RequirementRepository from '../../repositories/requirement.repository.js';
 
 const requirementsRepo = new RequirementRepository();
@@ -37,7 +39,9 @@ export async function extractRequirementsNode(state) {
     }
 
     try {
-      const { requirements } = await runExtractor(pages.sort((a, b) => a.page - b.page));
+      const { requirements } = await extractor.extractRequirements(
+        pages.sort((a, b) => a.page - b.page),
+      );
       for (const requirement of requirements) {
         rows.push({
           tenderId: state.tenderId,
