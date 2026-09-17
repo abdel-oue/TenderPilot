@@ -272,12 +272,19 @@ per-workspace config divergence.
 
 ---
 
-## Git — commit, never push
+## Git — never commit unless told, never push
 
-Every feature and every fix ends with a commit. Not a batch of five features in one commit,
-not a day of work left uncommitted in the working tree.
+Committing is the human's call. Finish the work, say what's done, and leave it in the
+working tree. The human reads the diff and says what gets committed.
 
-- **Commit after each feature or fix, as soon as it works.** One logical change per commit.
+- **Never commit on your own initiative.** No commit at the end of a feature, no commit
+  "because it works", no commit before switching tasks. Wait to be told.
+- **Commit only when the human asks for it**, and only what they name. "Commit this" with
+  no target means the change just discussed, nothing else in the tree.
+- When work is done, report it and stop. Suggesting a commit message is fine; running
+  `git commit` is not.
+- One logical change per commit, still — if the human asks to commit two unrelated things,
+  say so and offer to split them.
 - **Never `git push`.** Never open a PR, never create a remote branch. Pushing is the human's
   call, always. The work stays local.
 - Never `git commit --amend`, `git rebase`, `git reset --hard`, or force anything. History
@@ -362,4 +369,4 @@ not a day of work left uncommitted in the working tree.
 - ❌ Run the container as root
 - ❌ `git push`, open a PR, or create a remote branch — commit locally and stop
 - ❌ Amend, rebase, or reset already-existing history
-- ❌ Leave a finished feature or fix uncommitted
+- ❌ Commit without being asked — finished work waits in the working tree for the human
