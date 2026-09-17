@@ -4,47 +4,75 @@
 #   docker build -f docker/Dockerfile --target api .
 #   docker build -f docker/Dockerfile --target web .
 #
-# Compose picks the target per service:
-#   api:    build: { context: ., dockerfile: docker/Dockerfile, target: api }
-#   worker: the api IMAGE, command: node src/worker.js   (no build block)
-#   web:    build: { context: ., dockerfile: docker/Dockerfile, target: web }
-#
 # `deps` is a SHARED stage: the install layer is built once and reused by both
 # final images. That is the reason this is one file and not two.
-#
+
+# Pinned to a patch version, never :latest.
+FROM node:22.20.0-alpine3.21 AS base
+
 # ---------------------------------------------------------------------------
-# TODO: stage `deps`
-#   FROM node:22-alpine pinned by digest. No :latest.
-#   Copy ONLY the manifests — package.json, package-lock.json,
-#   apps/api/package.json, apps/web/package.json, packages/shared/package.json —
-#   then `npm ci`. Nothing else gets copied here, or every code change
-#   invalidates the install.
-#
-# TODO: stage `build` (FROM deps)  — WEB ONLY
-#   The api needs no build: it is JavaScript, ESM, and runs from source.
-#   Copy the source and run `npm run build -w @tenderpilot/web`
-#   (next.config.ts already sets output: 'standalone' and outputFileTracingRoot).
-#   NEXT_PUBLIC_API_URL is baked into the bundle at build time -> ARG, not ENV.
-#
-# TODO: stage `api` (FROM node:22-alpine, the same pinned base)
-#   `npm ci --omit=dev`, then copy apps/api/src and packages/shared/src.
-#   No devDependencies. Nothing is compiled.
-#   Non-root user. EXPOSE 3000. CMD ["node", "src/server.js"].
-#   Startup runs migrations then the seed (see docker-compose.yml).
-#   The worker runs this exact image with `command: node src/worker.js`.
-#
-# TODO: stage `web` (FROM node:22-alpine, the same pinned base)
-#   Copy .next/standalone + .next/static + public from `build`.
-#   Non-root user. ENV PORT=3100. EXPOSE 3100. CMD ["node", "server.js"].
-#
+# deps — manifests only, so a source change never invalidates the install.
 # ---------------------------------------------------------------------------
-# Ports: api 3000, web 3100.
-# No secret is ever baked in. Secrets arrive as runtime env from compose / .env.
-# NEXT_PUBLIC_* is public by definition — nothing sensitive goes there.
-#
-# The corpus at apps/api/src/db/seed/data/ is .dockerignore'd (it is gitignored too),
-# so it is MOUNTED into api + worker by compose, not copied into the image.
-#
-# NOT DONE: running api and web as two processes inside ONE container. That needs a
-# supervisor, hides a crash behind a live PID 1, and makes the two impossible to scale
-# or restart independently. Separate targets, separate containers, one file.
+FROM base AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
+RUN npm ci
+
+# ---------------------------------------------------------------------------
+# build — WEB ONLY. The api is JavaScript and runs from source.
+# ---------------------------------------------------------------------------
+FROM deps AS build
+WORKDIR /app
+# NEXT_PUBLIC_* is baked into the client bundle at build time, so it is an ARG.
+# Public by definition — nothing sensitive goes here.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+COPY packages/shared/src packages/shared/src
+COPY apps/web apps/web
+RUN npm run build -w @tenderpilot/web
+
+# ---------------------------------------------------------------------------
+# api — also the worker image (same image, different command).
+# ---------------------------------------------------------------------------
+FROM base AS api
+WORKDIR /app
+
+# pdftoppm (poppler) rasterizes the scanned dossiers, tesseract reads them.
+# AO-2026-004 and AO-2026-009 have no text layer at all, so this is not optional.
+RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-fra
+
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
+RUN npm ci --omit=dev
+
+COPY packages/shared/src packages/shared/src
+COPY apps/api/src apps/api/src
+COPY apps/api/drizzle.config.js apps/api/
+
+USER node
+WORKDIR /app/apps/api
+EXPOSE 3000
+CMD ["node", "src/server.js"]
+
+# ---------------------------------------------------------------------------
+# web — Next standalone bundle only. No source, no devDependencies.
+# ---------------------------------------------------------------------------
+FROM base AS web
+WORKDIR /app
+ENV NODE_ENV=production PORT=3100 HOSTNAME=0.0.0.0
+
+# outputFileTracingRoot is the repo root, so the standalone tree mirrors the
+# workspace: the server entry lands at apps/web/server.js, not ./server.js.
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build /app/apps/web/public ./apps/web/public
+
+USER node
+EXPOSE 3100
+CMD ["node", "apps/web/server.js"]

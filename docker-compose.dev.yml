@@ -1,0 +1,17 @@
+# Local dev only. NOT auto-loaded (that is why it is not named .override.yml):
+# the jury's `docker compose up` must use the self-contained images.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Bind-mounts the api source so an edit is one container restart, not a rebuild.
+services:
+  api:
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./apps/api/src/db/seed/data:/app/apps/api/src/db/seed/data:ro
+  worker:
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./apps/api/src/db/seed/data:/app/apps/api/src/db/seed/data:ro

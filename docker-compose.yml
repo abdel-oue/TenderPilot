@@ -1,22 +1,110 @@
-# TODO: compose stack. Acceptance test = `docker compose up` on a clean clone
-# starts everything and runs migrations + seed.
-#
-# ONE Dockerfile at docker/Dockerfile, context = repo root, one target per service:
-#   web    -> build: { context: ., dockerfile: docker/Dockerfile, target: web }
-#             ports 3100:3100, depends_on api, build arg NEXT_PUBLIC_API_URL
-#   api    -> build: { context: ., dockerfile: docker/Dockerfile, target: api }
-#             ports 3000:3000, depends_on postgres+redis (condition: service_healthy)
-#             runs migrations then seed on startup
-#   worker -> the SAME image as api: no build block, command: node dist/worker.js
-#
-#   postgres -> pgvector/pgvector:pg16 (pinned, no :latest), healthcheck pg_isready,
-#               data on a NAMED volume so `docker compose down` keeps the database,
-#               ./docker/init.sql mounted read-only at
-#               /docker-entrypoint-initdb.d/init.sql (runs once, on an empty volume)
-#   redis    -> redis:7-alpine (pinned), healthcheck redis-cli ping
-#
-# Ports: api 3000, web 3100. WEB_ORIGIN on the api must match the web origin or
-# CORS fails on every response.
-#
-# Secrets arrive as runtime env from .env. Nothing baked into an image.
-# data/ is gitignored and mounted read-only into api + worker.
+# Acceptance test for this file: `docker compose up` on a clean clone starts
+# everything and runs migrations + seed. Five services, one command.
+
+name: tenderpilot
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, on an empty volume. Drop the volume to re-run it.
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Published for local psql/drizzle-kit only. Drop this line on a VPS.
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+    environment: &api_env
+      NODE_ENV: production
+      PORT: 3000
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      LOG_LEVEL: ${LOG_LEVEL}
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      LLM_URL: ${LLM_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION}
+      AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+      AZURE_OPENAI_MAX_TOKENS: ${AZURE_OPENAI_MAX_TOKENS}
+      OCR_LANG: ${OCR_LANG}
+      STUB_LLM: ${STUB_LLM}
+    volumes: &corpus_mount
+      # The corpus is gitignored and .dockerignore'd: mounted, never baked in.
+      - ./apps/api/src/db/seed/data:/app/apps/api/src/db/seed/data:ro
+    # Migrate, then seed, then serve. The seed is idempotent, so this is safe
+    # on every restart.
+    command: >
+      sh -c "node src/db/migrate.js && node src/db/seed/index.js && node src/server.js"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    # The api IMAGE with a different command. No build block: compose reuses it.
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+    environment: *api_env
+    volumes: *corpus_mount
+    command: ["node", "src/worker.js"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+    ports:
+      - "3100:3100"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
