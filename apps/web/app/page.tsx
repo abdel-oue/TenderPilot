@@ -27,7 +27,7 @@ export default async function Page(props: PageProps) {
   const locale = await getLandingLocale(props.searchParams);
   const copy = locale === "fr" ? FR : EN;
   return (
-    <div id="top" className="landing" lang={locale} data-testid="landing">
+    <div id="top" className="overflow-clip" lang={locale} data-testid="landing">
       <Navigation key={locale} copy={copy} locale={locale} />
       <main id="main">
         <HeroSection copy={copy} />

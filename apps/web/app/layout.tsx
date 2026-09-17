@@ -14,10 +14,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="fr"
-      className="h-full antialiased"
+      className="h-full scroll-pt-26 scroll-smooth antialiased"
       suppressHydrationWarning
     >
-      <body className="bg-background text-foreground min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <Providers>{children}</Providers>
       </body>
     </html>

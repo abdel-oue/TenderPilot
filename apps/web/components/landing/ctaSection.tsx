@@ -1,13 +1,40 @@
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { BrandLogo } from "./brandLogo";
+import { Button } from "@/components/ui/button";
+import { Container } from "@/components/ui/container";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { cn } from "@/lib/utils/classNameUtils";
+import { LEAD } from "@/lib/utils/landingStyleUtils";
 import type { LandingCopy } from "@/lib/landing/fr";
 
 interface CtaSectionProps { copy: LandingCopy }
 
 export function CtaSection({ copy }: CtaSectionProps) {
   return (
-    <section className="cta-section container" data-testid="cta">
-      <div className="cta-panel"><div><p className="eyebrow">{copy.cta.eyebrow}</p><h2>{copy.cta.title}</h2><p className="lead">{copy.cta.description}</p><div className="actions"><a className="button button-primary" href="#demo">{copy.demo}<ArrowUpRight size={17} /></a><a className="button" href="#how-it-works">{copy.cta.secondary}<ArrowRight size={17} /></a></div><p className="small-note">{copy.cta.note}</p></div><div className="cta-art" aria-hidden="true"><span /><span /><BrandLogo mark /></div></div>
-    </section>
+    <Container className="pt-2.5 pb-16 md:pb-25" data-testid="cta">
+      <section className="relative grid grid-cols-1 gap-7 overflow-hidden rounded-xl bg-inverse-surface px-7 py-9 text-inverse md:grid-cols-4 md:p-16">
+        <div className="relative z-1 md:col-span-3">
+          <Eyebrow className="text-micro text-inverse-muted sm:text-micro">{copy.cta.eyebrow}</Eyebrow>
+          <h2 className="font-heading text-panel font-normal tracking-display text-balance whitespace-pre-line">{copy.cta.title}</h2>
+          <p className={cn(LEAD, "text-inverse-muted md:text-base")}>{copy.cta.description}</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button variant="primary" href="#demo" className="border-inverse bg-inverse text-inverse-surface hover:bg-inverse">
+              {copy.demo}
+              <ArrowUpRight size={17} />
+            </Button>
+            <Button href="#how-it-works" className="border-inverse-border text-inverse hover:bg-inverse-border">
+              {copy.cta.secondary}
+              <ArrowRight size={17} />
+            </Button>
+          </div>
+          <p className="mt-4.5 text-xs text-inverse-muted">{copy.cta.note}</p>
+        </div>
+        <div className="relative hidden place-items-center md:grid" aria-hidden="true">
+          <span className="absolute size-77.5 rounded-full border border-inverse-border" />
+          <span className="absolute size-102.5 rounded-full border border-inverse-border" />
+          <BrandLogo mark />
+        </div>
+      </section>
+    </Container>
   );
 }
