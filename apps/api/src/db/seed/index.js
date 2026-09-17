@@ -1,7 +1,7 @@
 // Seed entry point. Idempotent. Non-destructive. Run it five times, same rows.
 //
 // The corpus sits BESIDE this file, in seed/data/ - gitignored, dropped in locally.
-// Resolve it relative to this module (import.meta.dirname, Node 24), never from cwd:
+// Resolve it relative to this module (import.meta.dirname, Node 22+), never from cwd:
 // the seed runs from the repo root in dev and from /app in the container.
 //
 // TODO: read data/profil-entreprise.json (validate with companySchema before

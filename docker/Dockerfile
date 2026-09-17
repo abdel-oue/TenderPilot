@@ -14,7 +14,7 @@
 #
 # ---------------------------------------------------------------------------
 # TODO: stage `deps`
-#   FROM node:24-alpine pinned by digest. No :latest.
+#   FROM node:22-alpine pinned by digest. No :latest.
 #   Copy ONLY the manifests — package.json, package-lock.json,
 #   apps/api/package.json, apps/web/package.json, packages/shared/package.json —
 #   then `npm ci`. Nothing else gets copied here, or every code change
@@ -26,14 +26,14 @@
 #   (next.config.ts already sets output: 'standalone' and outputFileTracingRoot).
 #   NEXT_PUBLIC_API_URL is baked into the bundle at build time -> ARG, not ENV.
 #
-# TODO: stage `api` (FROM node:24-alpine, the same pinned base)
+# TODO: stage `api` (FROM node:22-alpine, the same pinned base)
 #   `npm ci --omit=dev`, then copy apps/api/src and packages/shared/src.
 #   No devDependencies. Nothing is compiled.
 #   Non-root user. EXPOSE 3000. CMD ["node", "src/server.js"].
 #   Startup runs migrations then the seed (see docker-compose.yml).
 #   The worker runs this exact image with `command: node src/worker.js`.
 #
-# TODO: stage `web` (FROM node:24-alpine, the same pinned base)
+# TODO: stage `web` (FROM node:22-alpine, the same pinned base)
 #   Copy .next/standalone + .next/static + public from `build`.
 #   Non-root user. ENV PORT=3100. EXPOSE 3100. CMD ["node", "server.js"].
 #

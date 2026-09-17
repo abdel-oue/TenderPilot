@@ -2,7 +2,7 @@
 
 Coding rulebook. How code is written in this repo. Nothing about agent design here.
 
-Stack: Next.js App Router + React 19 + **TypeScript** (web) · Node 24 + Fastify +
+Stack: Next.js App Router + React 19 + **TypeScript** (web) · Node 22 + Fastify +
 **plain JavaScript, ESM** (api, agents, worker) · LangGraph · PostgreSQL 16 + pgvector via
 Drizzle · Redis 7 + BullMQ · Docker Compose.
 
@@ -165,7 +165,7 @@ otherwise.
   signature a reader gets.
 - A value crossing a boundary — HTTP body, LLM output, file on disk, env var — is parsed by
   a zod schema at that boundary. Inside, it is trusted. That line is the whole design.
-- Node 24 built-ins before packages: `fetch`, `crypto.createHash`, `structuredClone`,
+- Node 22 built-ins before packages: `fetch`, `crypto.createHash`, `structuredClone`,
   `AbortSignal.timeout`, `import.meta.dirname`. No `node-fetch`, no `uuid`, no `dotenv`
   (use `node --env-file=.env`).
 
@@ -298,7 +298,7 @@ not a day of work left uncommitted in the working tree.
   devDependencies.
 - The api has **no build step** — it is JavaScript. Its runtime target copies `src/` and the
   production `node_modules`, and runs `node src/server.js`. Only the web is built.
-- Base `node:24-alpine`, pinned. No `latest` tags anywhere.
+- Base `node:22-alpine`, pinned. No `latest` tags anywhere.
 - Runs as a non-root user in the final stage.
 - The root `.dockerignore` excludes `node_modules`, `.next`, `dist`, `.git`, `tests`, `e2e`,
   `data`, and `.env*` (but not `.env.example`).
@@ -349,7 +349,7 @@ not a day of work left uncommitted in the working tree.
 - ❌ Write an extensionless relative import on the api (`./lib/llm` instead of `./lib/llm.js`)
 - ❌ Resolve a path from `process.cwd()` instead of `import.meta.dirname`
 - ❌ Add TypeScript, `tsc`, or a `.ts` file to `apps/api` or `packages/shared`
-- ❌ Add a package for something Node 24 already ships (`node-fetch`, `uuid`, `dotenv`, `rimraf`)
+- ❌ Add a package for something Node 22 already ships (`node-fetch`, `uuid`, `dotenv`, `rimraf`)
 - ❌ Export a function from the api without a JSDoc block
 - ❌ Write a query outside `db/[entity]Queries.ts`
 - ❌ Edit a migration that has already been applied, or run `drizzle-kit push` on a shared DB
