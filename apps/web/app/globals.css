@@ -1,0 +1,6 @@
+/* Tailwind entry + design tokens.
+   TODO: @import "tailwindcss";
+   TODO: @theme block holds the tokens - colors, radii, spacing.
+         NOT tailwind.config.js.
+   TODO: light + dark token sets as CSS variables.
+   Components reference the variables. No hex, no arbitrary Tailwind values. */

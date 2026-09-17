@@ -1,0 +1,14 @@
+# TODO: compose stack. Acceptance test = `docker compose up` on a clean clone
+# starts everything and runs migrations + seed.
+#
+# services:
+#   web      -> apps/web/Dockerfile, depends_on api
+#   api      -> apps/api/Dockerfile, depends_on postgres+redis (condition: service_healthy)
+#               runs migrations then seed on startup
+#   worker   -> SAME image as api, different command (no third Dockerfile)
+#   postgres -> pgvector/pgvector:pg16 (pinned, no :latest), healthcheck pg_isready,
+#               data on a NAMED volume so `docker compose down` keeps the database
+#   redis    -> redis:7-alpine (pinned), healthcheck redis-cli ping
+#
+# Secrets arrive as runtime env from .env. Nothing baked into an image.
+# data/ is gitignored and mounted read-only into api + worker.
