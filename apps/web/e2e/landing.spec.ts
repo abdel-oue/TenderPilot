@@ -51,6 +51,7 @@ test("changes the walkthrough and opens the cited passage in the demo", async ({
   await expect(page).toHaveURL(/#demo$/);
   await page.getByTestId("view-source").click();
   await expect(page.getByTestId("analysis-tab-2")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("analysis-tab-2")).toBeFocused();
   await expect(page.getByTestId("source-excerpt")).toBeVisible();
   await page.getByTestId("source-toggle").click();
   await expect(page.getByTestId("source-excerpt")).toBeHidden();
@@ -58,6 +59,22 @@ test("changes the walkthrough and opens the cited passage in the demo", async ({
   await expect(page.getByTestId("analysis-panel")).toContainText("À compléter");
   await page.getByTestId("analysis-tab-1").press("ArrowRight");
   await expect(page.getByTestId("analysis-tab-2")).toBeFocused();
+});
+
+test("keeps English content and controls in view at narrow widths in either theme", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 320 : 768, height: 900 });
+  await page.goto("/?lang=en");
+  await expect(page.getByTestId("landing")).toHaveAttribute("lang", "en");
+  await expect(page.getByTestId("language-en")).toBeVisible();
+  await expect(page.getByTestId("hero-demo")).toBeVisible();
+  for (const theme of ["dark", "light"]) {
+    await page.getByTestId(`theme-${theme}`).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const header = await page.getByTestId("header-logo").boundingBox();
+    expect(header?.x).toBeGreaterThanOrEqual(0);
+    await page.getByTestId("demo").scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("analysis-tab-2")).toBeVisible();
+  }
 });
 
 test("opens mobile navigation and closes it after selection or Escape", async ({ page, isMobile }) => {

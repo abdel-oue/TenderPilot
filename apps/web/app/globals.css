@@ -102,7 +102,7 @@ p { line-height: 1.7; }
 .brand-logo { display: block; position: relative; width: 168px; height: 40px; overflow: hidden; }
 .brand-logo img { position: absolute; width: 195px; max-width: none; height: auto; top: -13px; left: -14px; filter: invert(1) hue-rotate(180deg); }
 .dark .brand-logo img { filter: none; }
-.brand-mark { width: 170px; height: 190px; }
+.brand-mark { width: 170px; height: 210px; }
 .brand-mark img { width: 300px; top: -49px; left: -61px; }
 .desktop-links { display: flex; gap: 24px; margin-inline: auto; }
 .desktop-links a { font-size: .78rem; color: var(--muted); white-space: nowrap; }
@@ -110,7 +110,7 @@ p { line-height: 1.7; }
 .nav-cta { padding: 10px 15px; min-height: 40px; font-size: .73rem; }
 .preferences { display: flex; align-items: center; gap: 13px; }
 .language-switch { display: flex; gap: 3px; }
-.language-option { padding: 6px 5px; color: var(--muted); font-size: .68rem; border-radius: 3px; font-weight: 500; }
+.language-option { padding: 6px 5px; min-width: 28px; text-align: center; color: var(--muted); font-size: .68rem; border-radius: 3px; font-weight: 500; }
 .language-option.is-active { color: var(--foreground); background: var(--soft); font-weight: 700; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: transparent; border-radius: 5px; }
 .icon-button:hover { background: var(--soft); }
