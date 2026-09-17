@@ -5,4 +5,4 @@
 //
 // TODO: graphStateSchema - tenderId, documents[], pages[], requirements[],
 //       classifications[], rubric[], score, verdict, errors[], nodeTrace[]
-// TODO: export type GraphState = z.infer<typeof graphStateSchema>
+// TODO: /** @typedef {import('zod').infer<typeof graphStateSchema>} GraphState */

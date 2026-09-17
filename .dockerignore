@@ -5,7 +5,7 @@ node_modules
 **/dist
 **/tests
 apps/web/e2e
-data
+apps/api/src/db/seed/data
 .env
 .env.*
 !.env.example

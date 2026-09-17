@@ -7,4 +7,5 @@
 //       so E2E runs are deterministic and burn no quota
 // TODO: log tokens + latency per call with pino
 //
-// No second SDK. Never JSON.parse a model response. Never cast it with `as`.
+// No second SDK. Never JSON.parse a model response and use it directly: the zod
+// schema is the only thing standing between the model and the rest of the app.

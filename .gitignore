@@ -35,5 +35,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Seed data
-/data
+# Seed data corpus (2.1MB of PDFs, dropped in locally)
+/apps/api/src/db/seed/data

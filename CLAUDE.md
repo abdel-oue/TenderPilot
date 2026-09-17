@@ -2,9 +2,17 @@
 
 Coding rulebook. How code is written in this repo. Nothing about agent design here.
 
-Stack: Next.js 16 App Router + React 19 + TypeScript (web) · Node 20 + Fastify + TypeScript
-(api, agents, worker) · LangGraph · PostgreSQL 16 + pgvector via Drizzle · Redis 7 + BullMQ ·
-Docker Compose.
+Stack: Next.js App Router + React 19 + **TypeScript** (web) · Node 24 + Fastify +
+**plain JavaScript, ESM** (api, agents, worker) · LangGraph · PostgreSQL 16 + pgvector via
+Drizzle · Redis 7 + BullMQ · Docker Compose.
+
+**The two sides use different languages on purpose.** `apps/web` is TypeScript. `apps/api` is
+JavaScript — no build step, no `tsc`, `node src/server.js` runs the source. `packages/shared`
+is JavaScript so the api can import it directly; the web still gets full types from it,
+because `z.infer` works on a zod schema defined in a `.js` file.
+
+Zod is what replaces the type checker on the api side. Every boundary — HTTP body, LLM
+response, seed input, env — is parsed, not assumed.
 
 ---
 
@@ -30,25 +38,26 @@ tenderpilot/
 │   │   ├── tests/
 │   │   └── e2e/                  # [flow].spec.ts — Playwright
 │   └── api/
-│       ├── src/
-│       │   ├── server.ts         # fastify bootstrap only
-│       │   ├── worker.ts         # BullMQ bootstrap only
-│       │   ├── routes/           # [resource].ts
-│       │   ├── services/         # [entity]Service.ts
+│       ├── src/                  # JavaScript, ESM — no build step
+│       │   ├── server.js         # fastify bootstrap only
+│       │   ├── worker.js         # BullMQ bootstrap only
+│       │   ├── routes/           # [resource].js
+│       │   ├── services/         # [entity]Service.js
 │       │   ├── db/
-│       │   │   ├── schema/       # [entity].ts tables, re-exported from index.ts
-│       │   │   ├── seed/         # index.ts + data files
+│       │   │   ├── schema/       # [entity].js tables, re-exported from index.js
+│       │   │   ├── seed/
+│       │   │   │   ├── index.js
+│       │   │   │   └── data/     # the corpus — gitignored, dropped in locally
 │       │   │   ├── migrations/   # generated, committed
-│       │   │   └── [entity]Queries.ts
-│       │   ├── validators/       # [entity]Validator.ts
-│       │   ├── queue/            # queues.ts, jobs/
+│       │   │   └── [entity]Queries.js
+│       │   ├── validators/       # [entity]Validator.js
+│       │   ├── queue/            # queues.js, jobs/
 │       │   ├── graph/            # nodes + graph wiring
-│       │   ├── agents/<name>/    # index.ts · prompts.ts · schema.ts
-│       │   └── lib/              # llm.ts, pdf.ts, ocr.ts, cache.ts
+│       │   ├── agents/<name>/    # index.js · prompts.js · schema.js
+│       │   └── lib/              # llm.js, pdf.js, ocr.js, cache.js
 │       └── tests/
-├── packages/shared/
-│   └── src/schemas/              # [entity].ts — zod schemas + inferred types, BOTH sides
-└── data/                         # fixture corpus, gitignored, read-only
+└── packages/shared/
+    └── src/schemas/              # [entity].js — zod schemas, imported by BOTH sides
 ```
 
 Forbidden to touch: `node_modules`, `.next`, `.git`, `.env` and `.env.local`, lockfiles.
@@ -59,16 +68,18 @@ and is updated whenever a new env var is introduced.
 
 ## Fixture data
 
-`data/` is the input corpus and is **gitignored** — not in the repo, dropped in locally.
-10 tender PDFs (`AO-2026-004` and `-009` are pure scans, OCR required), the company
-profile as PDF + JSON, `references.csv`, `equipe.csv`, 4 attestations, 2 past technical
-memos. Generated from a fixed seed, so it is identical on every machine, and it is what
-the seed and the test fixtures draw from. A fresh clone needs it copied in before
-`db:seed` will work.
+The corpus lives at `apps/api/src/db/seed/data/` — beside the seed that consumes it — and is
+**gitignored**: not in the repo, dropped in locally. 10 tender PDFs (`AO-2026-004` and `-009`
+are pure scans, OCR required), the company profile as PDF + JSON, `references.csv`,
+`equipe.csv`, 4 attestations, 2 past technical memos. Generated from a fixed seed, so it is
+identical on every machine.
 
-- Read-only. Never rewrite, regenerate, or reformat a file under `data/`.
-- Parsed/derived artefacts go to the DB or a gitignored cache dir, never back into `data/`.
-- `db/seed/` reads from `data/`, keyed on the stable ids (`REF-01`, `CV-01`, …).
+- Read-only. Never rewrite, regenerate, or reformat a file under `seed/data/`.
+- Parsed/derived artefacts go to the DB or a gitignored cache dir, never back into `seed/data/`.
+- The seed resolves it relative to its own module (`import.meta.dirname`), never from `cwd` —
+  it runs from the repo root in dev and from `/app` in the container.
+- Keyed on the stable ids in the dataset (`REF-01`, `CV-01`, …).
+- A fresh clone needs the corpus copied in before `db:seed` does anything.
 
 ---
 
@@ -77,29 +88,33 @@ the seed and the test fixtures draw from. A fresh clone needs it copied in befor
 - Route files 50–150 lines max. Page files max 200. Component files max 150.
 - A route file contains: input validation + service dispatch. Nothing else. It should look
   almost empty.
-- All SQL lives in `db/[entity]Queries.ts` — nowhere else.
-- All business logic lives in `services/[entity]Service.ts`.
-- All input validation lives in `validators/[entity]Validator.ts` (zod).
+- All SQL lives in `db/[entity]Queries.js` — nowhere else.
+- All business logic lives in `services/[entity]Service.js`.
+- All input validation lives in `validators/[entity]Validator.js` (zod).
 - All frontend fetch functions live in `lib/api/[entity].ts`.
-- All prompt text lives in `agents/<name>/prompts.ts`. No inline prompt strings anywhere else.
-- Every LLM call goes through `lib/llm.ts`. One client, one baseURL, one key.
+- All prompt text lives in `agents/<name>/prompts.js`. No inline prompt strings anywhere else.
+- Every LLM call goes through `lib/llm.js`. One client, one baseURL, one key.
 - Any function reused twice gets extracted into `lib/`.
-- Shared types/schemas go in `packages/shared`. A type duplicated between web and api is a bug.
+- Shared schemas go in `packages/shared`, in JavaScript. A schema duplicated between web and
+  api is a bug.
 - Tests live in the workspace `tests/` folder, mirroring the source path
-  (`src/services/scoreService.ts` → `tests/services/scoreService.test.ts`). Never colocated.
+  (`src/services/scoreService.js` → `tests/services/scoreService.test.js`). Never colocated.
 
 ---
 
 ## Naming
 
-- Files: `camelCase.ts` / `camelCase.tsx` — not PascalCase files
+Extensions: **api and `packages/shared` are `.js`. Web is `.ts` / `.tsx`.** Same conventions
+otherwise.
+
+- Files: `camelCase.js` / `camelCase.ts` / `camelCase.tsx` — not PascalCase files
 - Components: PascalCase inside the file (`export default function RequirementRow() {}`)
-- Hooks: `use[Name].ts` · Query keys: `[feature]Keys.ts` · Services: `[entity]Service.ts`
-- Validators: `[entity]Validator.ts` · Queries: `[entity]Queries.ts` · API client: `lib/api/[entity].ts`
-- Utils: `lib/utils/[name]Utils.ts` · Routes: `routes/[resource].ts`
+- Hooks: `use[Name].ts` · Query keys: `[feature]Keys.ts` · API client: `lib/api/[entity].ts`
+- Services: `[entity]Service.js` · Validators: `[entity]Validator.js` · Queries: `[entity]Queries.js`
+- Utils: `lib/utils/[name]Utils.ts` · Routes: `routes/[resource].js`
 - Functions `camelCase`, constants `UPPER_SNAKE_CASE`, DB columns exactly as in Postgres
 - Pages `page.tsx`, layouts `layout.tsx`
-- Tests `[name].test.ts`
+- Tests `[name].test.js` on the api, `[name].test.ts` on the web
 
 ---
 
@@ -136,22 +151,45 @@ the seed and the test fixtures draw from. A fresh clone needs it copied in befor
 - Every LLM response is parsed against a zod schema. Never `JSON.parse` and hope.
 - Logging with Pino. No `console.log` in committed code.
 - Async/await everywhere — no floating promises, no missing `await` on DB or LLM calls.
+  Nothing catches a missing `await` here, so it is a review item, not a compiler problem.
 - Long work goes to BullMQ, not into the request handler.
+
+**JavaScript specifics** — the api has no type checker, so these are not style preferences:
+
+- **ESM only.** `import` / `export`. No `require`, no `module.exports`. `"type": "module"`
+  is set in `apps/api/package.json`.
+- Relative imports carry the extension: `./lib/llm.js`, not `./lib/llm`. Node ESM does not
+  resolve extensionless paths.
+- Paths resolve from `import.meta.dirname`, never from `process.cwd()`.
+- Every exported function gets a JSDoc block with `@param` and `@returns`. It is the only
+  signature a reader gets.
+- A value crossing a boundary — HTTP body, LLM output, file on disk, env var — is parsed by
+  a zod schema at that boundary. Inside, it is trusted. That line is the whole design.
+- Node 24 built-ins before packages: `fetch`, `crypto.createHash`, `structuredClone`,
+  `AbortSignal.timeout`, `import.meta.dirname`. No `node-fetch`, no `uuid`, no `dotenv`
+  (use `node --env-file=.env`).
 
 ---
 
 ## Schema validation (the Pydantic equivalent)
 
-Node has no Pydantic. **Zod is it**, and it is the only one in this repo.
+Node has no Pydantic. **Zod is it**, and it is the only one in this repo. On the api side it
+is also the only thing standing in for a type checker, so it is not optional anywhere.
 
-- Every schema lives in `packages/shared/src/schemas/[entity].ts` and is exported with its
-  inferred type: `export type Requirement = z.infer<typeof requirementSchema>`.
-- Never hand-write a TypeScript interface for something that has a zod schema. Infer it.
+- Every schema lives in `packages/shared/src/schemas/[entity].js` — JavaScript, so the api
+  imports it directly and the web still gets types from it via `z.infer`.
+- The schema is the definition. On the api, name the type with JSDoc off the schema:
+  `/** @typedef {import('zod').infer<typeof requirementSchema>} Requirement */`. On the web,
+  `type Requirement = z.infer<typeof requirementSchema>`. Never hand-write either shape.
 - **Every LLM JSON output is parsed with `safeParse`.** Never `JSON.parse` a model response
-  straight into a typed variable. On failure: log the zod issues, retry once with the issues
-  fed back into the prompt, then fail loud with `SCHEMA_VALIDATION_FAILED`.
+  and use the result. On failure: log the zod issues, retry once with the issues fed back
+  into the prompt, then fail loud with `SCHEMA_VALIDATION_FAILED`.
 - Every HTTP request body is parsed with zod in the validator before it reaches a service.
-- No `as SomeType` casts to make a model response type-check. That's lying to the compiler.
+- Parse at the boundary, once. Do not re-validate the same object three layers down, and do
+  not skip it because "the caller already checked" — the caller is not enforced by anything.
+- The seed's input is a boundary too: `profil-entreprise.json` is parsed before it is inserted.
+- `process.env` is parsed by a zod schema at startup, so a missing key fails on boot with a
+  readable message instead of as `undefined` in a query an hour later.
 - No second validation library. No Joi, no Yup, no class-validator, no ajv.
 
 ---
@@ -202,14 +240,20 @@ to demo. It must never be able to nuke work.
 Two layers, both required. A step is not done until both exist for it.
 
 **Unit / integration — Vitest**
+
+One runner for both workspaces: Vitest runs the api's `.js` and the web's `.ts` with no
+per-workspace config divergence.
+
 - Location: the workspace `tests/` folder, mirroring the source path. Never colocated.
-- Naming `[name].test.ts`.
+- Naming `[name].test.js` (api), `[name].test.ts` (web).
 - One `describe` per module, one `it` per behaviour, named as the behaviour
   (`it("flags an eliminatory requirement as a blocker")`), not as the function.
 - LLM calls are mocked at the `lib/llm.ts` boundary. Never hit the real endpoint in a unit test.
 - Fixtures (sample model responses, sample parsed pages) live in `tests/fixtures/` and are
   real captured payloads, not hand-written happy paths.
-- Every zod schema gets a test with a malformed payload, not only a valid one.
+- Every zod schema gets a test with a malformed payload, not only a valid one. With no type
+  checker on the api, these tests are the only thing asserting shape at all — they carry
+  more weight here than they would in a TypeScript service.
 - DB tests run against the compose Postgres with the migrations applied, inside a transaction
   that rolls back. No test writes rows that survive the test.
 - No snapshot test on LLM output. Model output isn't stable; assert on the parsed shape and
@@ -251,8 +295,10 @@ not a day of work left uncommitted in the working tree.
 ## Docker
 
 - Multi-stage: `deps` → `build` → per-app runtime target. A runtime image never contains
-  devDependencies or source TypeScript.
-- Base `node:20-alpine`, pinned. No `latest` tags anywhere.
+  devDependencies.
+- The api has **no build step** — it is JavaScript. Its runtime target copies `src/` and the
+  production `node_modules`, and runs `node src/server.js`. Only the web is built.
+- Base `node:24-alpine`, pinned. No `latest` tags anywhere.
 - Runs as a non-root user in the final stage.
 - The root `.dockerignore` excludes `node_modules`, `.next`, `dist`, `.git`, `tests`, `e2e`,
   `data`, and `.env*` (but not `.env.example`).
@@ -284,9 +330,9 @@ not a day of work left uncommitted in the working tree.
 - ❌ Commit `.env`, a key, or a token
 - ❌ Put business logic, SQL, or LLM calls in a route file
 - ❌ Write prompt text outside `agents/<name>/prompts.ts`
-- ❌ Fetch with `useEffect` + raw fetch, or `require()`
+- ❌ Fetch with `useEffect` + raw fetch
 - ❌ Hardcode colors
-- ❌ Use `any`
+- ❌ Use `any` in the web workspace
 - ❌ Use `<form onSubmit>`
 - ❌ Put business logic in components — extract to hooks, services, or utils
 - ❌ Skip loading/error states
@@ -297,8 +343,14 @@ not a day of work left uncommitted in the working tree.
 - ❌ Duplicate a type between `web` and `api` instead of putting it in `packages/shared`
 - ❌ Add a second LLM SDK, a second vector store, a second validation lib, or a state library
   nobody asked for
-- ❌ `JSON.parse` an LLM response without `safeParse`, or cast it with `as`
-- ❌ Hand-write an interface for something that already has a zod schema
+- ❌ `JSON.parse` an LLM response without `safeParse`
+- ❌ Hand-write an interface or typedef for something that already has a zod schema
+- ❌ Use `require()` or `module.exports` on the api — ESM only
+- ❌ Write an extensionless relative import on the api (`./lib/llm` instead of `./lib/llm.js`)
+- ❌ Resolve a path from `process.cwd()` instead of `import.meta.dirname`
+- ❌ Add TypeScript, `tsc`, or a `.ts` file to `apps/api` or `packages/shared`
+- ❌ Add a package for something Node 24 already ships (`node-fetch`, `uuid`, `dotenv`, `rimraf`)
+- ❌ Export a function from the api without a JSDoc block
 - ❌ Write a query outside `db/[entity]Queries.ts`
 - ❌ Edit a migration that has already been applied, or run `drizzle-kit push` on a shared DB
 - ❌ Put `TRUNCATE`, `DROP`, or an unfiltered `DELETE` in the seed

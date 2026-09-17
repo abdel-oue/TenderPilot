@@ -1,8 +1,8 @@
 // zod schema for the analysis result surfaced to the web app.
 //
 // TODO: analysisSchema - tenderId, verdict ('go' | 'no-go'), confidence,
-//       blockers: Requirement[] (unmet eliminatory), gaps[], matchedReferences[],
+//       blockers (unmet eliminatory requirements), gaps[], matchedReferences[],
 //       score, rubricBreakdown[], generatedAt
-// TODO: export type Analysis = z.infer<typeof analysisSchema>
+// TODO: /** @typedef {import('zod').infer<typeof analysisSchema>} Analysis */
 //
 // The verdict is never a bare boolean: the blockers are the product.

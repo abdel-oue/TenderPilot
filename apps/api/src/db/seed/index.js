@@ -1,7 +1,11 @@
 // Seed entry point. Idempotent. Non-destructive. Run it five times, same rows.
 //
-// TODO: read the company profile from data/profil-entreprise.json (validate with
-//       companySchema before inserting - the seed is an input boundary)
+// The corpus sits BESIDE this file, in seed/data/ - gitignored, dropped in locally.
+// Resolve it relative to this module (import.meta.dirname, Node 24), never from cwd:
+// the seed runs from the repo root in dev and from /app in the container.
+//
+// TODO: read data/profil-entreprise.json (validate with companySchema before
+//       inserting - the seed is an input boundary)
 // TODO: read data/references.csv and data/equipe.csv
 // TODO: upsert on the stable business keys: onConflictDoNothing / onConflictDoUpdate
 //       keyed on REF-01.., CV-01..
