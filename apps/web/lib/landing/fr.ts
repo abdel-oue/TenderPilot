@@ -1,0 +1,83 @@
+export const FR = {
+  nav: ["La plateforme", "Comment ça marche", "Votre décision", "La démo"],
+  discover: "Découvrir TenderPilot", demo: "Explorer une analyse", explore: "Découvrir la plateforme",
+  skip: "Aller au contenu", home: "TenderPilot — accueil", menu: "Ouvrir le menu", close: "Fermer le menu",
+  light: "Activer le thème clair", dark: "Activer le thème sombre", language: "Choisir la langue",
+  hero: {
+    eyebrow: "Un nouveau regard sur vos appels d’offres",
+    title: "Vos appels d’offres.", emphasis: "Les idées claires.",
+    description: "Du dossier de consultation à la décision de répondre. TenderPilot vous aide à comprendre les exigences, repérer les risques et concentrer vos efforts sur les bonnes opportunités.",
+    note: "Moins d’incertitude. Plus de temps pour l’essentiel.",
+    stats: [
+      ["01", "Un dossier", "Tous les éléments au même endroit"],
+      ["02", "Une analyse", "Les exigences rendues lisibles"],
+      ["03", "Des preuves", "Les sources à portée de main"],
+      ["04", "Votre décision", "Un go / no-go argumenté"],
+    ],
+  },
+  features: {
+    eyebrow: "La plateforme", title: "L’essentiel du dossier.\nSans perdre le détail.",
+    description: "Les appels d’offres sont complexes. Leur lecture ne devrait pas l’être. Retrouvez les informations qui comptent dans un parcours pensé pour votre métier.",
+    items: [
+      ["Comprendre les exigences", "Identifiez les critères administratifs, techniques et financiers dans les documents de consultation."],
+      ["Repérer les points bloquants", "Distinguez les critères éliminatoires des éléments à compléter avant de mobiliser votre équipe."],
+      ["Retrouver chaque source", "Revenez à la page et à l’article d’origine pour vérifier une exigence dans son contexte."],
+      ["Comparer avec votre profil", "Mettez en regard les attentes du marché, vos références et les capacités de votre entreprise."],
+      ["Prioriser les écarts", "Gardez une vue claire sur les justificatifs manquants et les points qui demandent votre attention."],
+      ["Décider avec du recul", "Appuyez votre go / no-go sur une synthèse argumentée. La décision finale reste la vôtre."],
+    ],
+  },
+  workflow: {
+    eyebrow: "Comment ça marche", title: "Du dossier à la décision.\nEn trois étapes.",
+    steps: [
+      ["Rassemblez votre dossier", "Réunissez les pièces de consultation et les informations utiles sur votre entreprise.", "Votre point de départ", "Dossier de consultation", "Règlement de consultation · PDF", "Cahier des prescriptions spéciales · PDF", "Profil et références de l’entreprise"],
+      ["Comprenez les enjeux", "Parcourez les exigences, leurs sources et les écarts à examiner avant de répondre.", "Une lecture structurée", "Les points à examiner", "Exigences administratives", "Capacités techniques et références", "Critères éliminatoires et justificatifs"],
+      ["Choisissez votre prochaine action", "Vérifiez les points sensibles et partagez une décision étayée avec votre équipe.", "Une décision préparée", "Votre synthèse go / no-go", "Points bloquants identifiés", "Sources et éléments à vérifier", "Décision finale par votre équipe"],
+    ],
+    preview: "Aperçu du parcours", illustration: "Exemple illustratif",
+  },
+  infrastructure: {
+    eyebrow: "Votre réalité métier", title: "Un dossier dense.\nUne lecture organisée.",
+    description: "Règlement de consultation, cahier des charges, références : chaque pièce apporte une partie de la réponse. TenderPilot les relie pour vous aider à voir l’ensemble.",
+    items: [["Les pièces de consultation", "Le cadre et les conditions du marché."], ["Votre entreprise", "Les capacités et les références à rapprocher."], ["Les points d’attention", "Ce qu’il faut vérifier avant de s’engager."]],
+    rows: [["Règlement de consultation", "Conditions de participation", "RC"], ["Cahier des prescriptions spéciales", "Besoins et obligations", "CPS"], ["Profil de l’entreprise", "Capacités et moyens", "PROFIL"], ["Références & attestations", "Éléments de preuve", "PIÈCES"]],
+    footer: "Une vue d’ensemble, des détails accessibles.",
+  },
+  metrics: {
+    eyebrow: "Votre décision", title: "Plus de clarté.\nÀ chaque point de contrôle.",
+    note: "Des repères concrets pour votre revue",
+    items: [["Exigences", "Ce que le marché demande", "Lisez les critères et leurs sources."], ["Écarts", "Ce qui reste à vérifier", "Repérez les éléments manquants."], ["Blocages", "Ce qui peut vous éliminer", "Examinez les conditions décisives."], ["Go / no-go", "Ce que vous décidez", "Arbitrez à partir des faits."]],
+    activity: "Votre fil de lecture", feed: ["Exigence identifiée dans le dossier", "Rapprochement avec votre profil", "Point d’attention à vérifier"],
+  },
+  integrations: {
+    eyebrow: "Vos documents, simplement", title: "Votre matière première.\nNotre point de départ.",
+    description: "Un parcours construit autour des documents que vous utilisez déjà pour préparer vos réponses.",
+    items: [["Consultation", "Règlement et conditions"], ["Cahier des charges", "Exigences du marché"], ["Références", "Expériences de l’entreprise"], ["Attestations", "Pièces justificatives"]],
+    callout: "Le contexte fait la différence.", detail: "Une exigence n’a de sens qu’en regard de votre entreprise. Reliez les attentes du dossier aux éléments qui peuvent les justifier.",
+    example: ["Exigence du dossier", "Référence similaire demandée", "Élément à rapprocher", "Une mission pertinente de votre entreprise"],
+  },
+  security: {
+    eyebrow: "Une analyse explicable", title: "La confiance commence\npar la transparence.",
+    description: "Une conclusion utile doit pouvoir être vérifiée. Gardez les sources, les incertitudes et votre jugement au centre de la décision.",
+    items: [["Sources identifiables", "Une page et un article pour retrouver le contexte d’une exigence."], ["Blocages explicités", "Comprenez pourquoi un critère peut remettre en cause la candidature."], ["Écarts visibles", "Distinguez une pièce manquante d’un critère non satisfait."], ["Lecture contextualisée", "Confrontez les exigences au profil et aux références de l’entreprise."], ["Incertitudes signalées", "Les informations incomplètes appellent une vérification humaine."], ["Décision humaine", "L’analyse vous accompagne ; votre équipe garde le dernier mot."]],
+    banner: "Une aide à la décision, avec les preuves à l’appui.",
+    bannerNote: "Revenez toujours au dossier original pour valider les points déterminants.",
+  },
+  demoSection: {
+    eyebrow: "À vous de voir", title: "Une conclusion.\nEt ce qui l’explique.",
+    description: "Explorez cet exemple de lecture d’un appel d’offres. Passez de la synthèse aux exigences, puis aux sources qui permettent de les vérifier.",
+    points: [["Une synthèse lisible", "Les éléments décisifs apparaissent en premier."], ["Des exigences qualifiées", "Les points à vérifier sont séparés des éléments disponibles."], ["Un retour au document", "La référence de la source reste accessible."]],
+    tabs: ["Synthèse", "Exigences", "Sources"],
+    sample: "Exemple fictif · aucune donnée client", tender: "Mission d’assistance technique", reference: "AO · EXEMPLE 2026",
+    verdict: "À vérifier avant de répondre", verdictText: "Une référence similaire doit être justifiée pour confirmer la candidature.",
+    rows: [["Référence sur une mission similaire", "À vérifier"], ["Équipe proposée", "Renseignée"], ["Attestation administrative", "À compléter"]],
+    sourceTitle: "Référence similaire", sourceRef: "RC · Article 6.2 · Page 8",
+    quote: "Le candidat présente au moins une référence portant sur une mission de nature similaire.",
+    sourceNote: "Extrait fictif utilisé uniquement pour présenter le fonctionnement de TenderPilot.",
+    openSource: "Voir le passage source", closeSource: "Masquer le passage source", next: "Votre prochaine action", nextText: "Vérifier la référence disponible et joindre le justificatif correspondant.",
+  },
+  cta: { eyebrow: "Chaque réponse commence par un choix", title: "Et si votre prochain dossier\nétait plus clair ?", description: "Prenez du recul sur les exigences. Gardez du temps pour construire la bonne réponse.", secondary: "Revoir le parcours", note: "Explorez l’exemple, à votre rythme." },
+  footer: { description: "De la lecture du dossier à la décision de répondre. Votre copilote pour les appels d’offres.", columns: ["Plateforme", "Le parcours", "TenderPilot"], links: [["Fonctionnalités", "Vos documents", "Votre décision"], ["Les trois étapes", "Exemple d’analyse", "Les sources"], ["Notre approche", "Découvrir TenderPilot", "Retour en haut"]], rights: "Tous droits réservés.", tagline: "La clarté, avant l’engagement." },
+};
+
+export type LandingCopy = typeof FR;
