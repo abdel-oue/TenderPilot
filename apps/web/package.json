@@ -8,7 +8,9 @@
     "start": "next start --port 3100",
     "lint": "eslint",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:landing": "node scripts/testLanding.mjs",
+    "test:e2e:landing": "playwright test --config playwright.landing.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",
