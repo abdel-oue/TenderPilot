@@ -16,8 +16,7 @@ tenderpilot/
 ├── .env.example
 ├── .dockerignore                 # root context serves both images
 ├── docker/
-│   ├── api.Dockerfile            # api + worker
-│   └── web.Dockerfile
+│   └── Dockerfile                # targets: api (worker reuses it), web
 ├── apps/
 │   ├── web/                      # Next.js
 │   │   ├── app/                  # routes, page.tsx / layout.tsx
