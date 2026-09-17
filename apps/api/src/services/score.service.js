@@ -1,4 +1,4 @@
-// Scoring + go/no-go verdict. No SQL, no LLM calls outside lib/llm.ts.
+// Scoring + go/no-go verdict. No SQL, no LLM calls outside lib/llm.js.
 //
 // TODO: scoreTender(tenderId) - match requirements against the company profile
 // TODO: findBlockers(requirements, company) - unmet ELIMINATORY requirements.

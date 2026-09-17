@@ -1,7 +1,7 @@
 import { appError } from '../lib/errors.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { signSessionToken } from '../lib/session.js';
-import { findByEmailWithHash, findById, insertUser } from '../db/userQueries.js';
+import { findByEmailWithHash, findById, insertUser } from '../db/user.queries.js';
 
 /**
  * Creates an account and its first session.

@@ -1,4 +1,4 @@
-// All tender business logic. No SQL (delegate to db/tenderQueries.ts).
+// All tender business logic. No SQL (delegate to db/tender.queries.js).
 //
 // TODO: list(filters)
 // TODO: getById(id) - throws NOT_FOUND so the route can map the status code

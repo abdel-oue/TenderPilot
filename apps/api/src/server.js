@@ -6,7 +6,7 @@ import { logger } from './lib/logger.js';
 import { AppError } from './lib/errors.js';
 import { closeDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
-import authRoutes from './routes/auth.js';
+import authRoutes from './routes/auth.routes.js';
 
 const app = Fastify({ loggerInstance: logger });
 

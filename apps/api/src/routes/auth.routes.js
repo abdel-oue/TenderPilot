@@ -1,5 +1,5 @@
-import { parseLoginBody, parseSignupBody } from '../validators/authValidator.js';
-import * as authService from '../services/authService.js';
+import { parseLoginBody, parseSignupBody } from '../validators/auth.validator.js';
+import * as authService from '../services/auth.service.js';
 import { clearSessionCookie, requireAuth, setSessionCookie } from '../lib/session.js';
 
 /**
