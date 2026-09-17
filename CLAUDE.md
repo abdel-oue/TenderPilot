@@ -14,6 +14,10 @@ Docker Compose.
 tenderpilot/
 ├── docker-compose.yml
 ├── .env.example
+├── .dockerignore                 # root context serves both images
+├── docker/
+│   ├── api.Dockerfile            # api + worker
+│   └── web.Dockerfile
 ├── apps/
 │   ├── web/                      # Next.js
 │   │   ├── app/                  # routes, page.tsx / layout.tsx
@@ -247,16 +251,25 @@ not a day of work left uncommitted in the working tree.
 
 ## Docker
 
-- Multi-stage Dockerfiles: `deps` → `build` → `runner`. The runtime image never contains
+- Multi-stage: `deps` → `build` → per-app runtime target. A runtime image never contains
   devDependencies or source TypeScript.
 - Base `node:20-alpine`, pinned. No `latest` tags anywhere.
 - Runs as a non-root user in the final stage.
-- `.dockerignore` excludes `node_modules`, `.next`, `.git`, `tests`, `e2e`, `.env*`.
+- The root `.dockerignore` excludes `node_modules`, `.next`, `dist`, `.git`, `tests`, `e2e`,
+  `data`, and `.env*` (but not `.env.example`).
 - **No secret is ever baked into an image or written in a Dockerfile.** Secrets arrive as
   runtime env from compose / `.env`, which is gitignored. `.env.example` holds the keys with
   empty values.
-- `apps/api` and `apps/web` each have their own Dockerfile. The worker reuses the api image
-  with a different command — no third Dockerfile.
+- **One Dockerfile for the whole repo: `docker/Dockerfile`.** It has shared `deps` and
+  `build` stages and three runtime targets — `api`, `web`, and the worker (which is the `api`
+  image with a different command). Compose selects with `target:`. The install layer is built
+  once and reused by both images; that is why it is one file.
+- Build context is the repo root, because both apps need `packages/shared`. One root
+  `.dockerignore` — a per-app one is never read with a root context.
+- Never run api and web as two processes in one container. Separate targets, separate
+  containers.
+- Ports: api **3000**, web **3100**. `WEB_ORIGIN` on the api must match the web origin.
+  `NEXT_PUBLIC_API_URL` is baked into the web bundle at build time, so it is a build arg.
 - Compose services: `web`, `api`, `worker`, `postgres`, `redis`. Postgres and redis have
   healthchecks; api and worker use `depends_on: condition: service_healthy`.
 - Postgres data on a named volume. Deleting containers must not delete the database.

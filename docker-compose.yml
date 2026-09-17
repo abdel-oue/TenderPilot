@@ -1,14 +1,20 @@
 # TODO: compose stack. Acceptance test = `docker compose up` on a clean clone
 # starts everything and runs migrations + seed.
 #
-# services:
-#   web      -> apps/web/Dockerfile, depends_on api
-#   api      -> apps/api/Dockerfile, depends_on postgres+redis (condition: service_healthy)
-#               runs migrations then seed on startup
-#   worker   -> SAME image as api, different command (no third Dockerfile)
+# ONE Dockerfile at docker/Dockerfile, context = repo root, one target per service:
+#   web    -> build: { context: ., dockerfile: docker/Dockerfile, target: web }
+#             ports 3100:3100, depends_on api, build arg NEXT_PUBLIC_API_URL
+#   api    -> build: { context: ., dockerfile: docker/Dockerfile, target: api }
+#             ports 3000:3000, depends_on postgres+redis (condition: service_healthy)
+#             runs migrations then seed on startup
+#   worker -> the SAME image as api: no build block, command: node dist/worker.js
+#
 #   postgres -> pgvector/pgvector:pg16 (pinned, no :latest), healthcheck pg_isready,
 #               data on a NAMED volume so `docker compose down` keeps the database
 #   redis    -> redis:7-alpine (pinned), healthcheck redis-cli ping
+#
+# Ports: api 3000, web 3100. WEB_ORIGIN on the api must match the web origin or
+# CORS fails on every response.
 #
 # Secrets arrive as runtime env from .env. Nothing baked into an image.
 # data/ is gitignored and mounted read-only into api + worker.

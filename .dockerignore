@@ -1,0 +1,11 @@
+.git
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/tests
+apps/web/e2e
+data
+.env
+.env.*
+!.env.example

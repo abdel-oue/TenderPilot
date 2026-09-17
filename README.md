@@ -10,4 +10,4 @@ cp .env.example .env   # fill it
 docker compose up
 ```
 
-Migrations and the seed run on api startup. Web on :3000, api on :3001.
+Migrations and the seed run on api startup. api on :3000, web on :3100.
