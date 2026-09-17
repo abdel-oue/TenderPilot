@@ -28,7 +28,15 @@ export function findBlockers(requirements, matches) {
   const byId = new Map(matches.map((m) => [m.requirementId, m]));
 
   return requirements
-    .filter((r) => r.obligation === 'eliminatoire')
+    // Only an unmet CAPABILITY disqualifies. A procedural instruction ("deposer
+    // avant le 12/03", "inclure l'acte d'engagement") is a task on the response
+    // checklist - the company cannot fail it at analysis time, and treating it
+    // as a capability gap disqualifies every dossier on principle.
+    // Only a CAPABILITY disqualifies. A procedure is a task on the response
+    // checklist and a notation threshold is an outcome of the commission's
+    // scoring - the company can fail neither at analysis time, and treating them
+    // as capability gaps disqualifies every dossier on principle.
+    .filter((r) => r.obligation === 'eliminatoire' && r.nature === 'capacite')
     .filter((r) => {
       const status = byId.get(r.id)?.status ?? 'unknown';
       return status === 'unmet' || status === 'unknown';
@@ -55,7 +63,10 @@ export function findBlockers(requirements, matches) {
  * @param {{ requirementId: string, status: string }[]} matches
  * @returns {number} rounded to one decimal
  */
-export function coverageScore(requirements, matches) {
+export function coverageScore(allRequirements, matches) {
+  // Procedural items are scored as part of the response checklist, not of the
+  // company's fitness, so they do not drag the coverage score down.
+  const requirements = allRequirements.filter((r) => r.nature === 'capacite');
   if (requirements.length === 0) return 0;
   const byId = new Map(matches.map((m) => [m.requirementId, m]));
 
@@ -71,19 +82,24 @@ export function coverageScore(requirements, matches) {
 }
 
 /**
- * Projects the dossier's OWN grading grid onto our coverage, and reports any
- * criterion whose elimination threshold we fall under.
+ * Projects the dossier's OWN grading grid onto our coverage.
+ *
+ * The shortfalls it returns are WARNINGS, never blockers. Requirement coverage is
+ * not a technical mark: inferring "you will score under 60/85" from "38% of the
+ * requirements are evidenced" is not a supportable claim, and it fired on every
+ * single dossier when it was allowed to force a no-go. Refusing to invent a
+ * disqualification is the whole point of this product.
  *
  * The threshold is never hardcoded: it comes from the grid parsed out of this
  * specific dossier, because every dossier grades differently.
  *
  * @param {{ label: string, maxPoints: number, weight: number, eliminationThreshold: number|null }[]} rubric
  * @param {number} coverage 0-100
- * @returns {{ breakdown: { label: string, points: number, maxPoints: number }[], thresholdBlockers: { label: string, points: number, threshold: number }[] }}
+ * @returns {{ breakdown: object[], thresholdWarnings: { label: string, points: number, threshold: number }[] }}
  */
 export function projectRubric(rubric, coverage) {
   const breakdown = [];
-  const thresholdBlockers = [];
+  const thresholdBlockers = []; // returned as thresholdWarnings
 
   for (const criterion of rubric) {
     const maxPoints = Number(criterion.maxPoints) || 0;
@@ -100,7 +116,7 @@ export function projectRubric(rubric, coverage) {
     }
   }
 
-  return { breakdown, thresholdBlockers };
+  return { breakdown, thresholdWarnings: thresholdBlockers };
 }
 
 /**

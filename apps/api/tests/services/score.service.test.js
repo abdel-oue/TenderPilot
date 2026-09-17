@@ -9,6 +9,7 @@ import {
 const req = (id, obligation, extra = {}) => ({
   id,
   obligation,
+  nature: 'capacite',
   text: `exigence ${id}`,
   sourcePage: 1,
   sourceArticle: null,
@@ -42,6 +43,26 @@ describe('findBlockers', () => {
     expect(findBlockers([req('a', 'eliminatoire')], [match('a', 'met')])).toHaveLength(0);
   });
 
+  it('does not block on a notation threshold nobody can hold in advance', () => {
+    // "Obtenir une note technique d'au moins 60/85" is an outcome of the
+    // commission's scoring, not something a profile can evidence.
+    const notation = req('a', 'eliminatoire', { nature: 'notation' });
+    expect(findBlockers([notation], [match('a', 'unknown')])).toHaveLength(0);
+  });
+
+  it('does not block on a procedural requirement the company cannot fail today', () => {
+    // "Deposer le pli avant le 12/03" is eliminatory in the dossier's own words,
+    // but it is a task on the response checklist, not evidence the company is
+    // ineligible. Blocking on it disqualifies every dossier on principle.
+    const procedural = req('a', 'eliminatoire', { nature: 'procedure' });
+    expect(findBlockers([procedural], [match('a', 'unknown')])).toHaveLength(0);
+  });
+
+  it('still blocks on an unmet capability', () => {
+    const capability = req('a', 'eliminatoire', { nature: 'capacite' });
+    expect(findBlockers([capability], [match('a', 'unmet')])).toHaveLength(1);
+  });
+
   it('carries the source page through, so the blocker stays clickable', () => {
     const blockers = findBlockers(
       [req('a', 'eliminatoire', { sourcePage: 47, sourceArticle: 'Article 12' })],
@@ -64,6 +85,19 @@ describe('coverageScore', () => {
     expect(coverageScore(requirements, matches)).toBe(66.7);
   });
 
+  it('scores only capabilities, leaving procedure and notation out', () => {
+    const requirements = [
+      req('a', 'eliminatoire', { nature: 'capacite' }),
+      req('b', 'eliminatoire', { nature: 'procedure' }),
+      req('c', 'eliminatoire', { nature: 'notation' }),
+    ];
+    // Only 'a' counts, and it is met, so coverage is total rather than halved by
+    // a checklist item nobody has done yet.
+    expect(
+      coverageScore(requirements, [match('a', 'met'), match('b', 'unknown'), match('c', 'unknown')]),
+    ).toBe(100);
+  });
+
   it('scores an empty requirement set as 0 rather than dividing by zero', () => {
     expect(coverageScore([], [])).toBe(0);
   });
@@ -74,21 +108,21 @@ describe('coverageScore', () => {
 });
 
 describe('projectRubric', () => {
-  it("reports a criterion that falls under this dossier's own elimination threshold", () => {
+  it("warns - never blocks - when a criterion falls under this dossier's threshold", () => {
     const rubric = [
       { label: 'Valeur technique', maxPoints: 85, weight: 0.7, eliminationThreshold: 60 },
     ];
     // 50% coverage of 85 points = 42.5, under the 60-point threshold.
-    const { breakdown, thresholdBlockers } = projectRubric(rubric, 50);
+    const { breakdown, thresholdWarnings } = projectRubric(rubric, 50);
     expect(breakdown[0]).toMatchObject({ points: 42.5, maxPoints: 85 });
-    expect(thresholdBlockers).toEqual([
+    expect(thresholdWarnings).toEqual([
       { label: 'Valeur technique', points: 42.5, threshold: 60 },
     ]);
   });
 
   it('reports nothing when the criterion has no threshold', () => {
     const rubric = [{ label: 'Prix', maxPoints: 15, weight: 0.3, eliminationThreshold: null }];
-    expect(projectRubric(rubric, 10).thresholdBlockers).toEqual([]);
+    expect(projectRubric(rubric, 10).thresholdWarnings).toEqual([]);
   });
 });
 

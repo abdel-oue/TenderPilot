@@ -8,6 +8,7 @@ import { appError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { runWithContext, setContext } from '../lib/requestContext.js';
 import { GRAPH_VERSION, buildGraph } from '../graph/index.js';
+import { analysisJobId, analysisQueue } from '../queue/queues.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
 import TenderRepository from '../repositories/tender.repository.js';
 
@@ -18,10 +19,11 @@ export default class AnalysisService {
    * @param {TenderRepository} [deps.tenders]
    * @param {() => Promise<object>} [deps.graphFactory]
    */
-  constructor({ analyses, tenders, graphFactory } = {}) {
+  constructor({ analyses, tenders, graphFactory, queue } = {}) {
     this.analyses = analyses ?? new AnalysisRepository();
     this.tenders = tenders ?? new TenderRepository();
     this.graphFactory = graphFactory ?? buildGraph;
+    this.queue = queue ?? analysisQueue;
     this.graph = null;
   }
 
@@ -32,9 +34,11 @@ export default class AnalysisService {
   }
 
   /**
-   * Creates a run row and starts the graph. Returns as soon as the run exists:
-   * a full analysis is a minute of OCR and model calls, which has no business
-   * inside an HTTP request.
+   * Creates a run row and ENQUEUES the graph. Returns as soon as the run exists.
+   *
+   * The work goes to the worker, not to an un-awaited promise in this process: a
+   * full dossier is a minute of OCR and model calls, and leaving it here meant an
+   * api restart silently lost every analysis in flight with nothing to retry it.
    *
    * @param {string} tenderId
    * @returns {Promise<{ runId: string, tenderId: string, status: string }>}
@@ -44,21 +48,23 @@ export default class AnalysisService {
     if (!tender) throw appError('Appel d offres introuvable.', 'TENDER_NOT_FOUND', 404);
 
     const existing = await this.analyses.findLatestRun(tenderId);
-    if (existing && existing.status === 'running') {
+    if (existing && (existing.status === 'running' || existing.status === 'queued')) {
       // Idempotent by intent: double-clicking "analyser" must not run the graph
       // twice against the same dossier.
-      return { runId: existing.id, tenderId, status: 'running', reused: true };
+      return { runId: existing.id, tenderId, status: existing.status, reused: true };
     }
 
     const run = await this.analyses.createRun(tenderId, GRAPH_VERSION);
     await this.tenders.updateStatus(tenderId, 'analyzing');
 
-    // Deliberately not awaited: the caller gets 202 immediately.
-    this.execute(run.id, tenderId).catch((error) =>
-      logger.error({ runId: run.id, err: error.message }, 'analysis: run crashed'),
+    await this.queue.add(
+      'analyze',
+      { runId: run.id, tenderId },
+      { jobId: analysisJobId(tenderId, GRAPH_VERSION, run.id) },
     );
+    logger.info({ runId: run.id, tenderId }, 'analysis: queued');
 
-    return { runId: run.id, tenderId, status: 'running', reused: false };
+    return { runId: run.id, tenderId, status: 'queued', reused: false };
   }
 
   /**
@@ -90,6 +96,7 @@ export default class AnalysisService {
           justification: state.justification ?? 'Analyse incomplete.',
           score: state.score === null || state.score === undefined ? null : String(state.score),
           blockers: state.blockers ?? [],
+          warnings: state.warnings ?? [],
           matches: state.matches ?? [],
           rubricBreakdown: state.rubricBreakdown ?? [],
           unreadPages: (state.pages ?? [])

@@ -32,6 +32,8 @@ export const analysisResults = pgTable('analysis_results', {
   justification: text('justification').notNull(),
   score: numeric('score'),
   blockers: jsonb('blockers').notNull().default([]),
+  // Risks surfaced to the human, never grounds for an automatic no-go.
+  warnings: jsonb('warnings').notNull().default([]),
   matches: jsonb('matches').notNull().default([]),
   rubricBreakdown: jsonb('rubric_breakdown').notNull().default([]),
   // EX-07: pages that could not be read, surfaced rather than silently dropped.

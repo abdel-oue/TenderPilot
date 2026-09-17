@@ -48,6 +48,7 @@ export async function extractRequirementsNode(state) {
           text: requirement.text,
           category: requirement.category,
           obligation: requirement.obligation,
+          nature: requirement.nature,
           quote: requirement.quote,
           sourceDocumentId: documentId,
           sourcePage: requirement.sourcePage,

@@ -28,6 +28,29 @@ Typage de chaque exigence :
   - "obligatoire" : exigée, mais sans mention explicite d'élimination
   - "optionnelle" : souhaitée, valorisée, "un plus"
 - category : "administrative" | "technical" | "financial" | "team" | "schedule"
+- nature : LA DISTINCTION LA PLUS IMPORTANTE.
+  - "capacite" : quelque chose que l'entreprise doit DEJA detenir ou etre.
+    Une certification, une reference dans un secteur, N annees d'experience,
+    un chiffre d'affaires minimum, un agrement, du materiel possede.
+    Ne pas l'avoir ecarte l'entreprise.
+  - "procedure" : quelque chose que LA REPONSE doit faire. Deposer avant une
+    date, inclure l'acte d'engagement, parapher chaque page, presenter le pli
+    en deux enveloppes, fournir une caution provisoire a la soumission.
+    L'entreprise ne peut pas "echouer" ces points aujourd'hui : ce sont des
+    taches de la reponse, pas des preuves d'ineligibilite.
+  - "notation" : un seuil de LA NOTATION elle-meme. "Obtenir une note technique
+    d'au moins 60 points sur 85", "etre classe parmi les trois premiers".
+    Personne ne detient une note avant que la commission siege : l'entreprise ne
+    peut ni la posseder ni la fournir aujourd'hui.
+
+  Test de tri, dans cet ordre :
+  1. La phrase parle d'une NOTE, d'un SCORE ou d'un CLASSEMENT a obtenir ?
+     -> "notation"
+  2. La phrase decrit le CONTENU, LA FORME ou LE DEPOT DU DOSSIER A REMETTRE
+     (deposer avant telle date, joindre telle piece, signer, cautionnement a
+     fournir a la soumission) ? -> "procedure"
+  3. La phrase decrit CE QUE L'ENTREPRISE EST OU DETIENT DEJA (certification,
+     references passees, effectif, CA, materiel, agrement) ? -> "capacite"
 
 Réponds UNIQUEMENT en JSON : {"requirements": [...]}.`;
 

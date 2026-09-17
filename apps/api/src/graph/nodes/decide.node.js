@@ -13,27 +13,24 @@ import { logger } from '../../lib/logger.js';
 export async function decide(state) {
   const blockers = findBlockers(state.requirements, state.matches);
 
-  // A criterion falling under this dossier's own elimination threshold is a
-  // blocker too, and it is the one a human would never spot by eye.
-  for (const t of state.thresholdBlockers ?? []) {
-    blockers.push({
-      requirementId: null,
-      text: `Note projetée insuffisante sur « ${t.label} »`,
-      reason:
-        `${t.points} points projetés pour un seuil éliminatoire de ${t.threshold} ` +
-        `fixé par la grille de notation de ce dossier.`,
-      sourcePage: null,
-      sourceArticle: null,
-      sourceDocumentId: null,
-    });
-  }
+  // A criterion projected under this dossier's own elimination threshold is a
+  // WARNING, not a blocker. Requirement coverage is not a technical mark, and
+  // turning one into the other invented a disqualification on every dossier.
+  // The human sees the risk and decides; the agent does not pretend to know.
+  const warnings = (state.thresholdWarnings ?? []).map((t) => ({
+    label: t.label,
+    text: `Risque sur « ${t.label} » : ${t.points} points projetés pour un seuil éliminatoire de ${t.threshold}.`,
+    detail:
+      'Projection indicative fondée sur la couverture des exigences, pas une note ' +
+      'réelle. À confirmer par un humain.',
+  }));
 
   const result = computeVerdict(state.score ?? 0, blockers, state.matches);
 
   logger.info(
-    { verdict: result.verdict, score: state.score, blockers: blockers.length },
+    { verdict: result.verdict, score: state.score, blockers: blockers.length, warnings: warnings.length },
     'decide: done',
   );
 
-  return { ...result, blockers };
+  return { ...result, blockers, warnings };
 }

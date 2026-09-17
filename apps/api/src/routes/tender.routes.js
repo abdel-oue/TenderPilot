@@ -1,9 +1,16 @@
-// Route file: validate input, dispatch to a service. Nothing else.
-// Should look almost empty. 50-150 lines max.
-//
-// TODO: GET    /tenders           -> tenderService.list
-// TODO: GET    /tenders/:id       -> tenderService.getById
-// TODO: POST   /tenders           -> validate with tenderValidator, then tenderService.create
-// TODO: DELETE /tenders/:id       -> tenderService.remove
-//
-// No SQL here. No business logic here. Validate BEFORE dispatching, always.
+/**
+ * Tender routes. Dispatch only.
+ */
+import TenderController from '../controllers/tender.controller.js';
+
+/**
+ * @param {import('fastify').FastifyInstance} app
+ * @returns {Promise<void>}
+ */
+export default async function tenderRoutes(app) {
+  const controller = new TenderController();
+
+  app.get('/tenders', (request, reply) => controller.list(request, reply));
+  app.get('/tenders/:id', (request, reply) => controller.get(request, reply));
+  app.post('/tenders', (request, reply) => controller.create(request, reply));
+}

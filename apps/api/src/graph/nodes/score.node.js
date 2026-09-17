@@ -9,6 +9,6 @@ import { coverageScore, projectRubric } from '../../services/score.service.js';
  */
 export async function score(state) {
   const coverage = coverageScore(state.requirements, state.matches);
-  const { breakdown, thresholdBlockers } = projectRubric(state.rubric ?? [], coverage);
-  return { score: coverage, rubricBreakdown: breakdown, thresholdBlockers };
+  const { breakdown, thresholdWarnings } = projectRubric(state.rubric ?? [], coverage);
+  return { score: coverage, rubricBreakdown: breakdown, thresholdWarnings };
 }

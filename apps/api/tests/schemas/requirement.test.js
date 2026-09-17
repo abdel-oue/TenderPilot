@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canBlock,
   extractedRequirementsSchema,
   isEliminatory,
   requirementSchema,
@@ -11,6 +12,7 @@ const valid = {
   text: 'Le candidat doit être certifié ISO 27001.',
   category: 'administrative',
   obligation: 'eliminatoire',
+  nature: 'capacite',
   sourceDocumentId: 'd1',
   sourcePage: 3,
   sourceArticle: 'Article 7.2',
@@ -24,6 +26,15 @@ describe('requirementSchema', () => {
   it('rejects an unknown category instead of passing it through', () => {
     const result = requirementSchema.safeParse({ ...valid, category: 'juridique' });
     expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown nature', () => {
+    expect(requirementSchema.safeParse({ ...valid, nature: 'autre' }).success).toBe(false);
+  });
+
+  it('requires a nature, since it decides whether the requirement can block', () => {
+    const { nature, ...withoutNature } = valid;
+    expect(requirementSchema.safeParse(withoutNature).success).toBe(false);
   });
 
   it('rejects an unknown obligation', () => {
@@ -54,6 +65,7 @@ describe('extractedRequirementsSchema', () => {
     text: valid.text,
     category: valid.category,
     obligation: valid.obligation,
+    nature: valid.nature,
     sourcePage: valid.sourcePage,
     sourceArticle: valid.sourceArticle,
     quote: 'Le candidat doit être certifié ISO 27001, sous peine de rejet.',
@@ -82,6 +94,24 @@ describe('extractedRequirementsSchema', () => {
 
   it('rejects a bare array, which is the shape a model most often drifts to', () => {
     expect(extractedRequirementsSchema.safeParse([extracted]).success).toBe(false);
+  });
+});
+
+describe('canBlock', () => {
+  it('is true only for an eliminatory capability', () => {
+    expect(canBlock({ obligation: 'eliminatoire', nature: 'capacite' })).toBe(true);
+  });
+
+  it('is false for an eliminatory procedure, which no company can fail today', () => {
+    expect(canBlock({ obligation: 'eliminatoire', nature: 'procedure' })).toBe(false);
+  });
+
+  it('is false for a notation threshold, which is decided after submission', () => {
+    expect(canBlock({ obligation: 'eliminatoire', nature: 'notation' })).toBe(false);
+  });
+
+  it('is false for a merely obligatory capability', () => {
+    expect(canBlock({ obligation: 'obligatoire', nature: 'capacite' })).toBe(false);
   });
 });
 

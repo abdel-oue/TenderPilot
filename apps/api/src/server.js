@@ -8,6 +8,8 @@ import { closeDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import authRoutes from './routes/auth.routes.js';
 import analysisRoutes from './routes/analysis.routes.js';
+import tenderRoutes from './routes/tender.routes.js';
+import documentRoutes from './routes/document.routes.js';
 import { runWithContext } from './lib/requestContext.js';
 
 const app = Fastify({ loggerInstance: logger });
@@ -23,6 +25,8 @@ app.addHook('onRequest', (request, _reply, done) => {
 });
 
 await app.register(authRoutes, { prefix: '/auth' });
+await app.register(tenderRoutes);
+await app.register(documentRoutes);
 await app.register(analysisRoutes);
 
 app.get('/health', async () => ({ status: 'ok' }));

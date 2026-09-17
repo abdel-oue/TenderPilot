@@ -14,6 +14,8 @@ export const requirements = pgTable(
     text: text('text').notNull(),
     category: text('category').notNull(),
     obligation: text('obligation').notNull(),
+    // capacite | procedure - only a capacite can block. See packages/shared.
+    nature: text('nature').notNull().default('capacite'),
     quote: text('quote'),
     sourceDocumentId: uuid('source_document_id').references(() => documents.id, {
       onDelete: 'set null',

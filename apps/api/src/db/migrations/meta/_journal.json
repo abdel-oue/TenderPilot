@@ -15,6 +15,20 @@
       "when": 1789683496637,
       "tag": "0001_hard_jigsaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789687358277,
+      "tag": "0002_swift_gambit",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789687570177,
+      "tag": "0003_brainy_molly_hayes",
+      "breakpoints": true
     }
   ]
 }
