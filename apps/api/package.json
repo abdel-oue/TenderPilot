@@ -21,6 +21,7 @@
     "@fastify/cors": "^11.1.0",
     "@fastify/multipart": "^10.1.1",
     "@langchain/langgraph": "^0.4.9",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.5",
     "@tenderpilot/shared": "*",
     "bullmq": "^5.58.5",
     "docx": "^9.7.1",

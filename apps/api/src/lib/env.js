@@ -37,6 +37,11 @@ const envSchema = z.object({
   AZURE_OPENAI_DEPLOYMENT_NAME: z.string().min(1),
   AZURE_OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(16384),
 
+  // Optional. Absent means the web_search tool is not registered at all, so the
+  // graph runs identically without it - never a runtime error, never a dead tool
+  // the model can call and get an exception from.
+  TAVILY_API_KEY: z.string().optional(),
+
   OCR_LANG: z.string().min(2).default('fra'),
 
   // '1' stubs both providers at the LlmService boundary so E2E runs are
