@@ -1,2 +1,6 @@
-// TODO: cn() - clsx + tailwind-merge. The conditional className helper.
-// Any function reused twice ends up in lib/ like this one.
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
