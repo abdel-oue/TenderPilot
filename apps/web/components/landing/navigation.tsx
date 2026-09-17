@@ -41,6 +41,9 @@ export function Navigation({ copy, locale }: NavigationProps) {
           ))}
         </div>
         <PreferenceControls copy={copy} locale={locale} />
+        <a href="/auth" className="hidden text-tiny whitespace-nowrap text-muted hover:text-foreground md:inline" data-testid="header-login">
+          {locale === "fr" ? "Se connecter" : "Sign in"}
+        </a>
         <Button variant="primary" href="#demo" className="hidden min-h-10 px-4 py-2.5 text-tiny lg:inline-flex">
           {copy.discover}
           <ArrowUpRight size={15} />
@@ -56,6 +59,9 @@ export function Navigation({ copy, locale }: NavigationProps) {
         {copy.nav.map((label, index) => (
           <a key={label} href={NAV_TARGETS[index]} onClick={() => setOpen(false)} className="py-2.5 text-base" data-testid={`mobile-link-${index}`}>{label}</a>
         ))}
+        <a href="/auth" onClick={() => setOpen(false)} className="py-2.5 text-base" data-testid="mobile-login">
+          {locale === "fr" ? "Se connecter" : "Sign in"}
+        </a>
         <Button variant="primary" href="#demo" onClick={() => setOpen(false)}>
           {copy.discover}
           <ArrowUpRight size={16} />
