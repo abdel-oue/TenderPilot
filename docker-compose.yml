@@ -10,7 +10,9 @@
 #   worker -> the SAME image as api: no build block, command: node dist/worker.js
 #
 #   postgres -> pgvector/pgvector:pg16 (pinned, no :latest), healthcheck pg_isready,
-#               data on a NAMED volume so `docker compose down` keeps the database
+#               data on a NAMED volume so `docker compose down` keeps the database,
+#               ./docker/init.sql mounted read-only at
+#               /docker-entrypoint-initdb.d/init.sql (runs once, on an empty volume)
 #   redis    -> redis:7-alpine (pinned), healthcheck redis-cli ping
 #
 # Ports: api 3000, web 3100. WEB_ORIGIN on the api must match the web origin or
