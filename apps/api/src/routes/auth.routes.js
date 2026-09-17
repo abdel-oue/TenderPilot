@@ -1,5 +1,5 @@
 import { parseLoginBody, parseSignupBody } from '../validators/auth.validator.js';
-import * as authService from '../services/auth.service.js';
+import AuthService from '../services/auth.service.js';
 import { clearSessionCookie, requireAuth, setSessionCookie } from '../lib/session.js';
 
 /**
@@ -8,6 +8,8 @@ import { clearSessionCookie, requireAuth, setSessionCookie } from '../lib/sessio
  * @returns {Promise<void>}
  */
 export default async function authRoutes(app) {
+  const authService = new AuthService();
+
   app.post('/signup', async (request, reply) => {
     const { user, token } = await authService.signup(parseSignupBody(request.body));
     setSessionCookie(reply, token);

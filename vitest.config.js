@@ -9,6 +9,9 @@ export default defineConfig({
           root: './apps/api',
           include: ['tests/**/*.test.js'],
           environment: 'node',
+          // lib/env.js parses process.env at import time, so the fake env has to
+          // be in place before the first import, not inside a beforeAll.
+          setupFiles: ['./tests/setup.js'],
         },
       },
       {
