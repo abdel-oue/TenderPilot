@@ -1,8 +1,10 @@
-// Barrel. Re-export every schema + its inferred type.
-// Both web and api import from here. A type duplicated across the two is a bug.
+// Barrel. Re-export every schema. Both web and api import from here.
+// A schema duplicated across the two is a bug.
 //
-// TODO: export * from './tender'
-// TODO: export * from './requirement'
-// TODO: export * from './company'
-// TODO: export * from './analysis'
-// TODO: export * from './graphState'
+// Relative specifiers carry the .js extension — Node ESM requires it.
+//
+// TODO: export * from './tender.js'
+// TODO: export * from './requirement.js'
+// TODO: export * from './company.js'
+// TODO: export * from './analysis.js'
+// TODO: export * from './graphState.js'

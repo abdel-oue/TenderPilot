@@ -1,0 +1,29 @@
+{
+  "name": "tenderpilot",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run dev -w @tenderpilot/web",
+    "dev:api": "npm run dev -w @tenderpilot/api",
+    "dev:worker": "npm run worker -w @tenderpilot/api",
+    "build": "npm run build -w @tenderpilot/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "vitest run",
+    "test:e2e": "npm run test:e2e -w @tenderpilot/web",
+    "db:generate": "npm run db:generate -w @tenderpilot/api",
+    "db:migrate": "npm run db:migrate -w @tenderpilot/api",
+    "db:seed": "npm run db:seed -w @tenderpilot/api",
+    "db:reset": "npm run db:reset -w @tenderpilot/api"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.1"
+  }
+}

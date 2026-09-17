@@ -1,6 +1,30 @@
-/* Tailwind entry + design tokens.
-   TODO: @import "tailwindcss";
-   TODO: @theme block holds the tokens - colors, radii, spacing.
-         NOT tailwind.config.js.
-   TODO: light + dark token sets as CSS variables.
-   Components reference the variables. No hex, no arbitrary Tailwind values. */
+@import "tailwindcss";
+
+/* Design tokens. Every colour in the app comes from a variable defined here.
+   No hex outside this file, no arbitrary Tailwind values in components.
+   TODO: add the semantic tokens - surface, border, muted, and the verdict pair
+   (--go / --no-go), plus their dark values in the media block below. */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
