@@ -23,7 +23,37 @@ docker compose up
 → interface `http://localhost:3100` · api `http://localhost:3000`
 → compte de démonstration `demo@tenderpilot.local` / `demo1234`
 
+Le worker indexe le corpus de l'entreprise à son démarrage. Pour le relancer à la
+main (opération idempotente, elle n'embarque que ce qui ne l'est pas encore) :
+
+```bash
+npm run db:index                       # le compte de démonstration
+npm run db:index -- vous@exemple.com   # un autre compte
+```
+
 Détails, variables et diagnostic : **[docs/deployment.md](docs/deployment.md)**.
+
+## Une entreprise par compte
+
+Un compte = une entreprise. Créez un second utilisateur et vous obtenez une
+application vide : ni profil, ni dossiers, ni documents. Rien n'est partagé, et il
+n'y a ni équipe ni invitation — c'est volontaire, l'authentification multi-
+utilisateurs est hors périmètre du cahier des charges.
+
+Un nouveau compte commence donc par **Mon entreprise** : importez votre
+`profil-entreprise.json`, puis déposez vos attestations et vos mémoires déjà
+rendus. Ce sont eux que le rédacteur fouille pour citer une référence réelle — sans
+eux, chaque section revient marquée `[A COMPLETER PAR L'HUMAIN]`.
+
+## Déposer un dossier
+
+Les PDF déposés depuis l'interface sont écrits dans `uploads/<utilisateur>/`, sur
+un volume Docker nommé — ils survivent à un `docker compose up --build`. Le nom du
+fichier stocké est l'empreinte de son contenu, ce qui fait que redéposer le même
+PDF ne crée pas de doublon et réutilise le cache d'extraction.
+
+Le fichier est validé sur ses octets (`%PDF`), pas sur l'en-tête annoncé par le
+navigateur, et plafonné à `MAX_UPLOAD_MB` (25 Mo par défaut).
 
 ## Ce que ça fait, concrètement
 
@@ -106,7 +136,7 @@ rôle du vérificateur de types, à chaque frontière, sans exception.
 ## Tests
 
 ```bash
-npm test          # 146 tests, sans réseau ni base de données
+npm test          # sans réseau ni base de données
 ```
 
 Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.

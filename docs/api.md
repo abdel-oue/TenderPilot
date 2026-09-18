@@ -12,13 +12,18 @@ Base locale : `http://localhost:3000`. Toutes les réponses sont en JSON sauf
 | Code | HTTP | Quand |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | le corps ou le paramètre n'a pas passé zod |
+| `UPLOAD_MISSING` | 400 | requête multipart sans fichier |
+| `UPLOAD_EMPTY` | 400 | fichier de zéro octet |
 | `INVALID_CREDENTIALS` | 401 | e-mail ou mot de passe faux |
 | `UNAUTHORIZED` | 401 | session absente ou expirée |
 | `TENDER_NOT_FOUND` | 404 | l'appel d'offres n'existe pas |
 | `DOCUMENT_NOT_FOUND` | 404 | le document n'existe pas |
 | `ANALYSIS_NOT_FOUND` | 404 | aucune analyse pour cet appel d'offres |
 | `EMAIL_TAKEN` | 409 | e-mail déjà utilisé |
+| `NOTHING_TO_EXPORT` | 409 | aucune section rédigée (un no-go n'est pas rédigé) |
 | `DOCUMENT_FILE_MISSING` | 410 | le PDF n'est pas sur le disque (corpus non monté) |
+| `UPLOAD_TOO_LARGE` | 413 | fichier au-dessus de `MAX_UPLOAD_MB` |
+| `UPLOAD_NOT_PDF` | 415 | les octets ne commencent pas par `%PDF` |
 | `SCHEMA_VALIDATION_FAILED` | 502 | le modèle n'a pas produit la forme attendue après une reprise |
 | `LLM_REQUEST_FAILED` | 502 | le fournisseur n'a pas répondu |
 
@@ -33,6 +38,57 @@ Vivacité. Aucun appel de dépendance.
 ```json
 { "status": "ok" }
 ```
+
+---
+
+## Authentification et portée
+
+`GET /health` et `/auth/*` mis à part, **tout endpoint exige une session**
+(cookie `tp_session`, httpOnly) et répond `401 UNAUTHORIZED` sans elle.
+
+**Un compte = une entreprise.** Le propriétaire est lu dans la session, jamais
+dans le corps ni dans l'URL : il n'y a aucun champ par lequel demander les
+dossiers de quelqu'un d'autre. Une ressource appartenant à un autre compte répond
+`404`, pas `403` — « pas à vous » et « pas là » sont la même réponse vue du
+dehors, et la seconde ne confirme pas que l'identifiant existe.
+
+---
+
+## Entreprise
+
+### `GET /company`
+
+Le profil, les références et l'équipe en une lecture. `profile: null` pour un
+compte qui n'a encore rien importé — c'est un état normal de première connexion.
+
+```json
+{
+  "profile": { "ice": "00212...", "raisonSociale": "…", "effectif": 48 },
+  "references": [{ "id": "REF-01", "client": "…", "secteur": "…" }],
+  "team": [{ "id": "CV-01", "poste": "…", "anneesExperience": 12 }]
+}
+```
+
+### `POST /company/profile`
+
+Importe un `profil-entreprise.json`. Le corps est validé contre le **même** schéma
+zod que celui utilisé par le seed. Idempotent : chaque écriture est un upsert sur
+une clé métier stable (`owner`, `owner+REF-xx`, `owner+CV-xx`).
+
+→ `201 { "references": 8, "team": 6 }`
+
+### `POST /company/documents`
+
+`multipart/form-data` : champ `kind` (`attestation` | `memoire` | `profil`) et le
+fichier. Mis en file d'indexation dès l'arrivée — OCR puis embeddings — ce qui le
+rend citable par le rédacteur.
+
+→ `201` avec le document créé.
+
+### `GET /company/documents`
+
+Le corpus de l'entreprise. `extractionPath: "pending"` tant que l'indexation n'est
+pas passée.
 
 ---
 
@@ -82,6 +138,39 @@ Le dossier et ses documents.
 
 `extractionPath` vaut `text_layer` ou `ocr` — c'est ainsi qu'on sait qu'un dossier
 était un scan.
+
+### `GET /tenders/:id/requirements`
+
+**EX-02 + EX-03** : la matrice de conformité. Chaque exigence typée
+(`obligatoire` | `optionnelle` | `eliminatoire`), en ordre de page, avec le
+document et la page dont elle vient — c'est ce qui rend la citation cliquable.
+
+`match` est la confrontation au profil, fusionnée ici pour qu'une seule requête
+réponde à « qu'exige ce dossier » et « l'avons-nous ». Il vaut `null` tant
+qu'aucune analyse n'a tourné : c'est autre chose que « nous avons regardé sans
+pouvoir conclure ».
+
+```json
+{
+  "requirements": [
+    {
+      "id": "…",
+      "text": "Le candidat doit être titulaire de la certification ISO 22301:2019.",
+      "category": "administrative",
+      "obligation": "eliminatoire",
+      "nature": "capacite",
+      "quote": "…",
+      "sourceDocumentId": "…",
+      "sourcePage": 47,
+      "sourceArticle": "7.3",
+      "match": { "status": "unmet", "evidence": [], "reason": "…", "confidence": 0.9 }
+    }
+  ],
+  "rubric": [{ "label": "Valeur technique", "maxPoints": "60", "weight": "1" }]
+}
+```
+
+---
 
 ### `POST /tenders`
 
@@ -207,3 +296,43 @@ Hors périmètre du cahier des charges, présente uniquement parce que l'applica
 a une porte d'entrée. `POST /auth/signup`, `POST /auth/login`, `POST /auth/logout`,
 `GET /auth/me`. Session JWT en cookie httpOnly. Compte de démonstration créé par le
 seed : `demo@tenderpilot.local` / `demo1234`.
+
+---
+
+## Dépôt d'un dossier (EX-01)
+
+### `POST /tenders/:id/documents`
+
+`multipart/form-data`, un fichier par requête :
+
+| Champ | Valeur |
+|---|---|
+| `kind` | `avis` · `cps` · `reglement` · `bpu` · `planning` |
+| `file` | le PDF |
+
+```bash
+curl -b cookies.txt -F kind=avis -F file=@AO-2026-004.pdf   http://localhost:3000/tenders/$ID/documents
+```
+
+Le fichier est validé sur ses octets (`%PDF`), pas sur l'en-tête annoncé, puis
+écrit dans `uploads/<owner>/<tender>/<sha256>.pdf`. Le chemin est construit à
+partir de la session et de l'empreinte, jamais d'une valeur fournie par
+l'appelant. Redéposer le même fichier met à jour la ligne au lieu d'en créer une
+seconde, et réutilise le cache d'extraction.
+
+→ `201` avec le document créé.
+
+---
+
+## Export (EX-05)
+
+### `GET /analyses/:runId/export.docx`
+
+Le mémoire technique en DOCX : page de garde (verdict, score, points bloquants avec
+leur page source), puis une section par catégorie, dans l'ordre de lecture.
+
+Les marqueurs `[A COMPLETER PAR L'HUMAIN]` sont repris **tels quels**. Un export
+qui les nettoierait rendrait un fichier qui a l'air fini et ne l'est pas.
+
+`409 NOTHING_TO_EXPORT` quand l'analyse n'a rédigé aucune section — ce qui est le
+cas de tout dossier en no-go, volontairement.
