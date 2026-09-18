@@ -16,7 +16,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { closeDb } from '../client.js';
 import { logger } from '../../lib/logger.js';
-import { hashPassword } from '../../lib/password.js';
+import { hashPassword } from '../../lib/auth.js';
 import CompanyService from '../../services/company.service.js';
 import DocumentRepository from '../../repositories/document.repository.js';
 import TenderRepository from '../../repositories/tender.repository.js';

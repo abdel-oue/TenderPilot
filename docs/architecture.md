@@ -59,11 +59,11 @@ routes/          dispatch uniquement, ~10 lignes par fichier
 controllers/     valide, appelle un service, mappe le code HTTP
 services/        toute la logique métier. Aucun SQL
 repositories/    tout le SQL. Aucune logique métier
-agents/          un agent = une classe, LlmService injecté
+agents/          un agent = une classe, LlmService injecté ; contrats dans schema.js
 prompts/         TOUT le texte de prompt, et rien d'autre
 graph/           câblage LangGraph + nœuds
 queue/           déclarations BullMQ + processors
-lib/             llm, pdf, ocr, cache, env, requestContext
+lib/             auth, pdf, ocr, cache, env, requestContext
 ```
 
 Toutes les classes prennent leurs dépendances au constructeur, ce qui les rend

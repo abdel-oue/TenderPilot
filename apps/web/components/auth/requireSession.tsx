@@ -23,7 +23,7 @@ export default function RequireSession({ children }: RequireSessionProps) {
   const signedOut = me.data === null;
 
   useEffect(() => {
-    if (signedOut) router.replace("/auth");
+    if (signedOut) router.replace("/login");
   }, [signedOut, router]);
 
   if (me.isLoading || signedOut) {

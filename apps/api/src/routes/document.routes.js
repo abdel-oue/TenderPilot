@@ -4,7 +4,7 @@
  * requireAuth on every one of them: a document belongs to exactly one company,
  * and the session is the only thing that says which.
  */
-import { requireAuth } from '../lib/session.js';
+import { requireAuth } from '../lib/auth.js';
 import DocumentController from '../controllers/document.controller.js';
 
 /**

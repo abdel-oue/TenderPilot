@@ -14,7 +14,7 @@
  */
 import LlmService, { TIERS } from '../services/llm.service.js';
 import { MATCHER_SYSTEM, renderProfile, renderRequirements } from '../prompts/matcher.prompts.js';
-import { MATCHER_STUB, matchedProfileSchema } from './matcher.schema.js';
+import { MATCHER_STUB, matchedProfileSchema } from './schema.js';
 
 export default class MatcherAgent {
   /** @param {LlmService} [llm] injectable for tests */

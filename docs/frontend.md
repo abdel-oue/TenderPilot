@@ -9,7 +9,7 @@ voir [api.md](api.md) ; pour ce qui se passe derrière, [pipeline.md](pipeline.m
 | Route | Fichier | Contenu |
 |---|---|---|
 | `/` | `app/page.tsx` | la page vitrine, bilingue fr/en, thème clair/sombre |
-| `/auth`, `/login` | `app/auth/page.tsx`, `app/login/page.tsx` | connexion, validation et visibilité du mot de passe |
+| `/login` | `app/login/page.tsx` | connexion, validation et visibilité du mot de passe ; cible de redirection quand la session expire |
 | `/signup` | `app/signup/page.tsx` | inscription puis profil entreprise |
 | `/dashboard` | `app/dashboard/page.tsx` | compteurs, dossiers récents, échéances et progression |
 | `/dashboard/settings` | `app/dashboard/settings/page.tsx` | compte, thème et déconnexion |

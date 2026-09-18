@@ -3,9 +3,31 @@ import { describe, expect, it } from 'vitest';
 process.env.JWT_SECRET ??= 'test-secret-that-is-long-enough-0123456789';
 process.env.DATABASE_URL ??= 'postgres://user:pass@localhost:5432/tenderpilot_test';
 
-const { signSessionToken, verifySessionToken } = await import('../../src/lib/session.js');
+// Dynamic: the module reads env at import time, so the vars above have to be set first.
+const { hashPassword, signSessionToken, verifyPassword, verifySessionToken } = await import(
+  '../../src/lib/auth.js'
+);
 
 const user = { id: '11111111-1111-4111-8111-111111111111', email: 'a@b.fr' };
+
+describe('password', () => {
+  it('accepts the password it hashed', async () => {
+    expect(await verifyPassword('correct horse', await hashPassword('correct horse'))).toBe(true);
+  });
+
+  it('rejects a wrong password', async () => {
+    expect(await verifyPassword('wrong', await hashPassword('correct horse'))).toBe(false);
+  });
+
+  it('salts: the same password hashes differently every time', async () => {
+    expect(await hashPassword('same')).not.toBe(await hashPassword('same'));
+  });
+
+  it('rejects a malformed stored hash instead of throwing', async () => {
+    expect(await verifyPassword('x', 'not-a-hash')).toBe(false);
+    expect(await verifyPassword('x', 'scrypt$zz$zz')).toBe(false);
+  });
+});
 
 describe('session', () => {
   it('round-trips the user id through a signed token', () => {

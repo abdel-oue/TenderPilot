@@ -4,8 +4,7 @@
  * charges, so this stays as small as it can be while still gating the app.
  */
 import { appError } from '../lib/errors.js';
-import { hashPassword, verifyPassword } from '../lib/password.js';
-import { signSessionToken } from '../lib/session.js';
+import { hashPassword, signSessionToken, verifyPassword } from '../lib/auth.js';
 import UserRepository from '../repositories/user.repository.js';
 
 export default class AuthService {

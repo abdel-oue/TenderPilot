@@ -4,7 +4,7 @@
  * Document upload for the company corpus lives in document.routes.js, with the
  * other document endpoints - it is a document, it just has no tender.
  */
-import { requireAuth } from '../lib/session.js';
+import { requireAuth } from '../lib/auth.js';
 import CompanyController from '../controllers/company.controller.js';
 
 /**

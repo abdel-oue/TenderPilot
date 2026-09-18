@@ -1,7 +1,7 @@
 /**
  * Tender routes. Dispatch only.
  */
-import { requireAuth } from '../lib/session.js';
+import { requireAuth } from '../lib/auth.js';
 import TenderController from '../controllers/tender.controller.js';
 
 /**

@@ -1,6 +1,6 @@
 import { parseLoginBody, parseSignupBody } from '../validators/auth.validator.js';
 import AuthService from '../services/auth.service.js';
-import { clearSessionCookie, requireAuth, setSessionCookie } from '../lib/session.js';
+import { clearSessionCookie, requireAuth, setSessionCookie } from '../lib/auth.js';
 
 /**
  * Auth routes. Validate, dispatch, set the cookie. Nothing else.

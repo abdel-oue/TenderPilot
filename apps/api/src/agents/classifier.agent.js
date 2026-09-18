@@ -9,7 +9,7 @@
  */
 import LlmService, { TIERS } from '../services/llm.service.js';
 import { CLASSIFIER_SYSTEM, renderRequirement } from '../prompts/classifier.prompts.js';
-import { CLASSIFIER_STUB, classificationSchema } from './classifier.schema.js';
+import { CLASSIFIER_STUB, classificationSchema } from './schema.js';
 
 export default class ClassifierAgent {
   /** @param {LlmService} [llm] injectable for tests */

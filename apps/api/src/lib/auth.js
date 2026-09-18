@@ -1,6 +1,41 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+/**
+ * Auth primitives: password hashing, and the session token + cookie + guard.
+ *
+ * Both halves are node:crypto and nothing else — no bcrypt, no jsonwebtoken.
+ */
+import { createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { env } from './env.js';
 import { appError } from './errors.js';
+
+const scryptAsync = promisify(scrypt);
+const KEY_LENGTH = 64;
+
+/**
+ * Hashes a plaintext password with scrypt (Node built-in — no bcrypt dependency).
+ * @param {string} password
+ * @returns {Promise<string>} `scrypt$<saltHex>$<hashHex>`
+ */
+export async function hashPassword(password) {
+  const salt = randomBytes(16);
+  const hash = await scryptAsync(password, salt, KEY_LENGTH);
+  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+/**
+ * Constant-time check of a password against a stored hash.
+ * @param {string} password
+ * @param {string} stored value produced by hashPassword
+ * @returns {Promise<boolean>}
+ */
+export async function verifyPassword(password, stored) {
+  const [scheme, saltHex, hashHex] = String(stored).split('$');
+  if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
+  const expected = Buffer.from(hashHex, 'hex');
+  if (expected.length !== KEY_LENGTH) return false;
+  const actual = await scryptAsync(password, Buffer.from(saltHex, 'hex'), KEY_LENGTH);
+  return timingSafeEqual(actual, expected);
+}
 
 // HS256 JWT in an httpOnly cookie. Hand-rolled because it is ~30 lines of
 // node:crypto and the alternative is another dependency.

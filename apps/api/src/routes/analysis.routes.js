@@ -1,7 +1,7 @@
 /**
  * Analysis routes. Dispatch only - the controller does the work.
  */
-import { requireAuth } from '../lib/session.js';
+import { requireAuth } from '../lib/auth.js';
 import AnalysisController from '../controllers/analysis.controller.js';
 
 /**

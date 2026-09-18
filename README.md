@@ -64,7 +64,7 @@ Détails, variables, mise en production et diagnostic :
 
 ## Espace de travail web
 
-- `/login` (ou `/auth`) : connexion ; `/signup` : création de compte et accueil
+- `/login` : connexion (redirection par défaut quand la session expire) ; `/signup` : création de compte et accueil
   dans le profil entreprise.
 - `/dashboard` : compteurs réels, décisions go / no-go, dossiers récents,
   échéances à venir et progression des analyses.

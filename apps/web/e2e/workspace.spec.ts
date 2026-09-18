@@ -34,7 +34,7 @@ test("shows login errors and lets the user retry successfully", async ({ page })
 test("protects workspace pages for signed-out visitors", async ({ page }) => {
   await mockWorkspaceApi(page, { signedIn: false });
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/auth$/);
+  await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByTestId("auth-panel")).toBeVisible();
 });
 

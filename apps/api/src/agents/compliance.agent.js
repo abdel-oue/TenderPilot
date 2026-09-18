@@ -12,7 +12,7 @@
  */
 import LlmService, { TIERS } from '../services/llm.service.js';
 import { COMPLIANCE_SYSTEM, renderComplianceTask } from '../prompts/writer.prompts.js';
-import { COMPLIANCE_STUB, complianceVerdictSchema } from './writer.schema.js';
+import { COMPLIANCE_STUB, complianceVerdictSchema } from './schema.js';
 
 export default class ComplianceAgent {
   /** @param {LlmService} [llm] */

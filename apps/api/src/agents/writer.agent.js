@@ -18,7 +18,7 @@ import {
   renderPlanTask,
   renderWriterTask,
 } from '../prompts/writer.prompts.js';
-import { SEARCH_PLAN_STUB, WRITER_STUB, draftedSectionSchema, searchPlanSchema } from './writer.schema.js';
+import { SEARCH_PLAN_STUB, WRITER_STUB, draftedSectionSchema, searchPlanSchema } from './schema.js';
 
 const MAX_TOOL_ROUNDS = 3;
 

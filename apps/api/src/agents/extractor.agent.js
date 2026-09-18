@@ -16,7 +16,7 @@ import {
   RUBRIC_STUB,
   extractedRequirementsSchema,
   parsedRubricSchema,
-} from './extractor.schema.js';
+} from './schema.js';
 
 export default class ExtractorAgent {
   /** @param {LlmService} [llm] injectable for tests */

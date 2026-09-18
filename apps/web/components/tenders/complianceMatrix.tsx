@@ -3,7 +3,7 @@
 //
 // Eliminatory requirements sort first: the reader is looking for what can
 // disqualify them, and making them scroll for it defeats the point.
-import RequirementRow from "@/components/requirementRow";
+import RequirementRow from "@/components/tenders/requirementRow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRequirements } from "@/hooks/useTenders";
 

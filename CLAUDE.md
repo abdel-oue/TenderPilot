@@ -44,21 +44,23 @@ tenderpilot/
 │       ├── src/                  # JavaScript, ESM — no build step
 │       │   ├── server.js         # fastify bootstrap only
 │       │   ├── worker.js         # BullMQ bootstrap only
-│       │   ├── routes/           # [entity].routes.js
+│       │   ├── routes/           # [entity].routes.js — path → controller, nothing else
+│       │   ├── controllers/      # [entity].controller.js — validate, dispatch, status code
 │       │   ├── services/         # [entity].service.js
+│       │   ├── repositories/     # [entity].repository.js — ALL the SQL
 │       │   ├── db/
 │       │   │   ├── schema/       # [entity].table.js, re-exported from index.js
 │       │   │   ├── seed/
 │       │   │   │   ├── index.js
 │       │   │   │   └── data/     # the corpus — gitignored, dropped in locally
 │       │   │   ├── migrations/   # generated, committed
-│       │   │   └── [entity].queries.js
+│       │   │   └── client.js
 │       │   ├── validators/       # [entity].validator.js
 │       │   ├── queue/            # queues.js, jobs/[name].job.js
 │       │   ├── graph/            # nodes + graph wiring
-│       │   ├── agents/           # [name].agent.js · [name].schema.js
+│       │   ├── agents/           # [name].agent.js · one shared schema.js
 │       │   ├── prompts/          # [name].prompts.js — ALL prompt text, one place
-│       │   └── lib/              # llm.js, pdf.js, ocr.js, cache.js
+│       │   └── lib/              # auth.js, pdf.js, ocr.js, cache.js
 │       └── tests/
 └── packages/shared/
     └── src/schemas/              # [entity].js — zod schemas, imported by BOTH sides
@@ -90,15 +92,18 @@ identical on every machine.
 ## Code organization
 
 - Route files 50–150 lines max. Page files max 200. Component files max 150.
-- A route file contains: input validation + service dispatch. Nothing else. It should look
-  almost empty.
-- All SQL lives in `db/[entity].queries.js` — nowhere else.
+- A route file maps a path to a controller method and nothing else. It should look almost
+  empty.
+- A controller contains: input validation + service dispatch + the HTTP status code. Nothing
+  else. It takes its service in the constructor, so a test can hand it a double.
+- All SQL lives in `repositories/[entity].repository.js` — nowhere else.
 - All business logic lives in `services/[entity].service.js`.
 - All input validation lives in `validators/[entity].validator.js` (zod).
 - All frontend fetch functions live in `lib/api/[entity].ts`.
 - All prompt text lives in `prompts/[name].prompts.js` — one folder, nothing else in it.
   No inline prompt strings anywhere else, agents included.
-- Every LLM call goes through `lib/llm.js`. One client, one baseURL, one key.
+- Every LLM call goes through `services/llm.service.js`, which is the only thing allowed to
+  talk to `services/azureOpenai.service.js`. One client, one baseURL, one key.
 - Any function reused twice gets extracted into `lib/`.
 - Shared schemas go in `packages/shared`, in JavaScript. A schema duplicated between web and
   api is a bug.
@@ -131,15 +136,16 @@ about one entity together.
 | Layer | Pattern | Example |
 | --- | --- | --- |
 | Routes | `routes/[entity].routes.js` | `auth.routes.js`, `tender.routes.js` |
+| Controllers | `controllers/[entity].controller.js` | `tender.controller.js` |
 | Services | `services/[entity].service.js` | `auth.service.js` |
 | Validators | `validators/[entity].validator.js` | `auth.validator.js` |
-| Queries | `db/[entity].queries.js` | `user.queries.js` |
+| Repositories | `repositories/[entity].repository.js` | `user.repository.js` |
 | Tables | `db/schema/[entity].table.js` | `user.table.js` |
 | Jobs | `queue/jobs/[name].job.js` | `ingestDocument.job.js` |
 | Graph nodes | `graph/nodes/[name].node.js` | `score.node.js` |
-| Agents | `agents/[name].agent.js` + `agents/[name].schema.js` | `classifier.agent.js` |
+| Agents | `agents/[name].agent.js`, all contracts in `agents/schema.js` | `classifier.agent.js` |
 | Prompts | `prompts/[name].prompts.js` | `classifier.prompts.js` |
-| Tests | mirrored path + `.test.js` | `tests/db/tender.queries.test.js` |
+| Tests | mirrored path + `.test.js` | `tests/repositories/tender.repository.test.js` |
 
 The entity stays `camelCase` — `ingestDocument.job.js`, not `ingest-document.job.js`. The
 role word is always lowercase. The entity is singular even when the route path is plural:
@@ -147,12 +153,14 @@ role word is always lowercase. The entity is singular even when the route path i
 
 Three exceptions, because they are barrels or single-purpose bootstraps and a role would
 add nothing: `server.js` / `worker.js`, every `index.js` barrel, and `lib/`. **`lib/` files
-stay plain nouns** — `llm.js`, `pdf.js`, `session.js`, `env.js`. The folder already says
-"helper"; `session.utils.js` only adds a word.
+stay plain nouns** — `auth.js`, `pdf.js`, `cache.js`, `env.js`. The folder already says
+"helper"; `auth.utils.js` only adds a word.
 
-Agents are flat, never a folder per agent: `agents/classifier.agent.js` and
-`agents/classifier.schema.js` sit side by side, and the prompt text they use lives away
-from them in `prompts/classifier.prompts.js`. **Prompt text has exactly one home.** It is
+Agents are flat, never a folder per agent: every `agents/[name].agent.js` sits at the same
+level, every output contract and STUB lives in the single `agents/schema.js` beside them, and
+the prompt text they use lives away from them in `prompts/[name].prompts.js`. One schema file
+rather than one per agent: three of the four were a re-export from `packages/shared` plus a
+stub, and a per-agent file for that is a file to open, not a boundary. **Prompt text has exactly one home.** It is
 the thing most often tweaked, reviewed and diffed on its own, and hunting it across four
 agent folders is how inline prompt strings start appearing.
 
@@ -201,7 +209,7 @@ This is an api rule. The web keeps its own conventions above — `page.tsx`, `la
 
 - **ESM only.** `import` / `export`. No `require`, no `module.exports`. `"type": "module"`
   is set in `apps/api/package.json`.
-- Relative imports carry the extension: `./lib/llm.js`, not `./lib/llm`. Node ESM does not
+- Relative imports carry the extension: `./lib/auth.js`, not `./lib/auth`. Node ESM does not
   resolve extensionless paths.
 - Paths resolve from `import.meta.dirname`, never from `process.cwd()`.
 - Every exported function gets a JSDoc block with `@param` and `@returns`. It is the only
@@ -242,9 +250,9 @@ is also the only thing standing in for a type checker, so it is not optional any
 - Table definitions live in `apps/api/src/db/schema/[entity].table.js`, re-exported from
   `db/schema/index.js`. One file per table group.
 - All queries are written with the Drizzle query builder inside
-  `db/[entity].queries.js`. A query written anywhere else is a bug.
+  `repositories/[entity].repository.js`. A query written anywhere else is a bug.
 - Raw SQL (`sql\`\``) only where Drizzle genuinely can't express it — pgvector similarity,
-  a window function. Keep it in the same `.queries.js` file with a comment saying why.
+  a window function. Keep it in the same `.repository.js` file with a comment saying why.
 - Select explicit columns. Never `select()` with no projection on a wide table.
 - Migrations are generated, never hand-edited after they've been applied:
   `drizzle-kit generate` → review the SQL → commit it. Migrations are committed to git.
@@ -291,7 +299,8 @@ per-workspace config divergence.
 - Naming `[name].test.js` (api, so `[entity].[role].test.js`), `[name].test.ts` (web).
 - One `describe` per module, one `it` per behaviour, named as the behaviour
   (`it("flags an eliminatory requirement as a blocker")`), not as the function.
-- LLM calls are mocked at the `lib/llm.js` boundary. Never hit the real endpoint in a unit test.
+- LLM calls are mocked at the `services/llm.service.js` boundary. Never hit the real endpoint
+  in a unit test.
 - Fixtures (sample model responses, sample parsed pages) live in `tests/fixtures/` and are
   real captured payloads, not hand-written happy paths.
 - Every zod schema gets a test with a malformed payload, not only a valid one. With no type
@@ -421,12 +430,12 @@ working tree. The human reads the diff and says what gets committed.
 - ❌ `JSON.parse` an LLM response without `safeParse`
 - ❌ Hand-write an interface or typedef for something that already has a zod schema
 - ❌ Use `require()` or `module.exports` on the api — ESM only
-- ❌ Write an extensionless relative import on the api (`./lib/llm` instead of `./lib/llm.js`)
+- ❌ Write an extensionless relative import on the api (`./lib/auth` instead of `./lib/auth.js`)
 - ❌ Resolve a path from `process.cwd()` instead of `import.meta.dirname`
 - ❌ Add TypeScript, `tsc`, or a `.ts` file to `apps/api` or `packages/shared`
 - ❌ Add a package for something Node 22 already ships (`node-fetch`, `uuid`, `dotenv`, `rimraf`)
 - ❌ Export a function from the api without a JSDoc block
-- ❌ Write a query outside `db/[entity].queries.js`
+- ❌ Write a query outside `repositories/[entity].repository.js`
 - ❌ Drop the dotted role on an api file — `routes/auth.js` or `routes/authRoutes.js`
   instead of `routes/auth.routes.js`
 - ❌ Edit a migration that has already been applied, or run `drizzle-kit push` on a shared DB
