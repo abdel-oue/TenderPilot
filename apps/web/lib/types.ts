@@ -52,7 +52,8 @@ export interface AnalysisResult {
   justification: string;
   score: string | null;
   blockers: Blocker[];
-  warnings: { text: string; reason?: string }[];
+  /** A risk the agent flagged without turning it into a disqualification. */
+  warnings: { label: string; text: string; detail: string }[];
   unreadPages: { documentId: string; page: number }[];
   rubricBreakdown: { label: string; points: number; maxPoints: number }[];
 }

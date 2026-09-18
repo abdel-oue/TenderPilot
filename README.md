@@ -44,6 +44,11 @@ Détails, variables et diagnostic : **[docs/deployment.md](docs/deployment.md)**
 - Sidebar responsive, menu mobile au clavier, transitions avec mouvement réduit,
   thème clair / sombre, guide et paramètres du compte.
 - `/company` : import du profil depuis un fichier JSON et documents de référence.
+- `/tenders/[id]` : le verdict, les points bloquants cités page et article, le
+  **détail de la notation** critère par critère, les risques que l'agent a signalés
+  sans en faire une disqualification, la matrice de conformité où chaque exigence
+  porte **la raison** de sa couverture et la confiance associée, les sections du
+  mémoire corrigeables, et la trace de l'agent étape par étape.
 
 Ces écrans utilisent les endpoints existants, sans changement backend. Les tests
 navigateur interceptent les appels API : ils vérifient les interactions frontend,
@@ -52,17 +57,25 @@ sans créer de comptes ni envoyer de documents au service réel.
 ```bash
 npm run dev:web                     # interface locale :3100
 npx vitest run --project web        # tests unitaires frontend
-npm run test:e2e                    # vitrine + espace de travail, desktop/mobile
+npm run test:e2e                    # vitrine, espace de travail et analyse
 npm run test:e2e:workspace -w @tenderpilot/web
+npm run test:e2e:smoke -w @tenderpilot/web   # stack réelle et vrai modèle, hors suite
 ```
 
 Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour ne
 pas tester accidentellement une ancienne image Docker sur `:3100`.
 
-Vérification frontend : **13 tests unitaires passent ; 31 tests navigateur passent,
-1 test réservé au mobile est ignoré sur desktop**. Le lint et le build de production
-font partie des vérifications de cette interface. Les tests navigateur utilisent
-une API simulée et ne constituent pas un test d’intégration du backend réel.
+Vérification frontend au 18/09/2026 : **13 tests unitaires passent ; 47 tests
+navigateur passent, 1 test réservé au mobile est ignoré sur desktop**. Le lint et le
+build de production font partie des vérifications de cette interface. Les tests
+navigateur utilisent une API simulée et ne constituent pas un test d’intégration du
+backend réel.
+
+`e2e/smoke.spec.ts` est le seul à parler à la vraie pile et au vrai modèle : il exige
+un `npm run up` démarré et le corpus semé, n'est dans aucune suite par défaut, et
+n'affirme que des invariants — un verdict existe, chaque exigence cite une page, la
+trace nomme les nœuds qui ont tourné. **Il n'a pas été exécuté ici**, faute de pile
+démarrée.
 
 ## Une entreprise par compte
 

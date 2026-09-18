@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:workspace": "playwright test --config playwright.workspace.config.ts",
+    "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
     "test:landing": "node scripts/testLanding.mjs",
     "test:e2e:landing": "playwright test --config playwright.landing.config.ts"
   },

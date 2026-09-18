@@ -17,7 +17,7 @@ voir [api.md](api.md) ; pour ce qui se passe derrière, [pipeline.md](pipeline.m
 | `/company` | `app/company/page.tsx` | profil entreprise, corpus, imports |
 | `/tenders` | `app/tenders/page.tsx` | la liste des dossiers et leur verdict |
 | `/tenders/new` | `app/tenders/new/page.tsx` | création du dossier et dépôt PDF |
-| `/tenders/[id]` | `app/tenders/[id]/page.tsx` | un dossier : trace, exigences, sections |
+| `/tenders/[id]` | `app/tenders/[id]/page.tsx` | un dossier : verdict, notation détaillée, risques, exigences et leur raison, sections, trace |
 
 Les layouts de `/dashboard`, `/company` et `/tenders` utilisent `WorkspaceShell` :
 session requise, sidebar, menu mobile accessible et transitions respectant la

@@ -2,6 +2,7 @@
 // The review screen. Order on the page is deliberate and is the EX-04 user story:
 // verdict, then what blocks it, then what it could not read, then the evidence.
 import { Skeleton } from "@/components/ui/skeleton";
+import AnalysisReasoning from "./analysisReasoning";
 import BlockerList from "./blockerList";
 import ComplianceMatrix from "./complianceMatrix";
 import SectionEditor from "./sectionEditor";
@@ -50,6 +51,9 @@ export default function TenderDetail({ tenderId }: TenderDetailProps) {
           <p className="text-sm text-muted">Lancez l&apos;analyse pour les obtenir.</p>
         )}
       </section>
+
+      {/* The verdict's own derivation, between the blockers and the evidence. */}
+      {result ? <AnalysisReasoning result={result} /> : null}
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide">Matrice de conformité</h2>

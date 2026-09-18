@@ -1,6 +1,6 @@
 // One requirement, with its provenance. No business logic in here.
 import { sourcePageUrl } from "@/lib/api/documents";
-import { formatCitation } from "@/lib/utils/formatUtils";
+import { formatCitation, formatConfidence } from "@/lib/utils/formatUtils";
 import { cn } from "@/lib/utils/classNameUtils";
 import type { MatrixRow } from "@/lib/types";
 
@@ -66,9 +66,19 @@ export default function RequirementRow({ requirement }: RequirementRowProps) {
             <span data-testid="requirement-match" data-status={match.status}>
               {MATCH_LABEL[match.status]}
             </span>
+            <span className="ml-2 text-mini text-muted">
+              {formatConfidence(match.confidence)}
+            </span>
             {match.evidence.length > 0 ? (
               <p className="mt-1 text-mini text-muted">{match.evidence.join(", ")}</p>
             ) : null}
+            {/* WHY the profile answers this requirement the way it does. The api
+                has always sent it; showing only the verdict made the matching
+                look like a lookup rather than a judgement that can be argued
+                with — and an empty `evidence` list unreadable. */}
+            <p data-testid="requirement-reason" className="mt-1 text-tiny text-muted">
+              {match.reason}
+            </p>
           </>
         ) : (
           <span className="text-muted">—</span>
