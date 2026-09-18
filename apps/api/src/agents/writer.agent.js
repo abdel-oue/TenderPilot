@@ -29,7 +29,7 @@ export default class WriterAgent {
 
   /**
    * @param {object} context section title, requirements, humanEdits, instructions
-   * @param {{ runId?: string|null, tenderId?: string|null }} [runContext]
+   * @param {{ runId?: string|null, tenderId?: string|null, ownerId?: string|null }} [runContext]
    * @returns {Promise<{ title: string, content: string, citations: string[], needsHuman: boolean, toolCalls: object[] }>}
    */
   async draft(context, runContext = {}) {

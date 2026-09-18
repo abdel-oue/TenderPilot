@@ -157,9 +157,9 @@ export default class ToolsService {
   async dispatch(name, args, context) {
     switch (name) {
       case 'search_company_docs':
-        return this.searchCompanyDocs(args.query, args.limit ?? 5);
+        return this.searchCompanyDocs(args.query, args.limit ?? 5, context.ownerId);
       case 'read_source_page':
-        return this.readSourcePage(args.documentId, args.page);
+        return this.readSourcePage(args.documentId, args.page, context.ownerId);
       case 'get_run_history':
         return this.getRunHistory(context.runId);
       case 'web_search':
@@ -178,13 +178,15 @@ export default class ToolsService {
    *
    * @param {string} query
    * @param {number} limit
+   * @param {string} ownerId whose corpus to search - one company per user
    * @returns {Promise<{ extracts: object[], note?: string }>}
    */
-  async searchCompanyDocs(query, limit) {
+  async searchCompanyDocs(query, limit, ownerId) {
     if (!query || !query.trim()) return { extracts: [], note: 'Requete vide.' };
+    if (!ownerId) return { extracts: [], note: "Aucune entreprise associee a cette analyse." };
 
     const [embedding] = await this.llm.embed([query], { name: 'tool:search_company_docs' });
-    const rows = await this.documents.searchSimilarChunks(embedding, limit, [
+    const rows = await this.documents.searchSimilarChunks(embedding, ownerId, limit, [
       'memoire',
       'attestation',
       'profil',
@@ -204,11 +206,19 @@ export default class ToolsService {
   }
 
   /**
+   * The documentId comes from the model, and the model has read a PDF an outsider
+   * supplied - so it is checked against the owner like any other untrusted input,
+   * not trusted because it came from our own agent.
+   *
    * @param {string} documentId
    * @param {number} page
+   * @param {string} ownerId
    * @returns {Promise<object>}
    */
-  async readSourcePage(documentId, page) {
+  async readSourcePage(documentId, page, ownerId) {
+    const document = await this.documents.findByIdForOwner(documentId, ownerId);
+    if (!document) return { error: 'Document introuvable dans ce dossier.' };
+
     const chunks = await this.documents.findChunks(documentId);
     const match = chunks.find((c) => c.page === Number(page));
 

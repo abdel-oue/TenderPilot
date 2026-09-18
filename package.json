@@ -21,6 +21,7 @@
     "db:generate": "npm run db:generate -w @tenderpilot/api",
     "db:migrate": "npm run db:migrate -w @tenderpilot/api",
     "db:seed": "npm run db:seed -w @tenderpilot/api",
+    "db:index": "npm run db:index -w @tenderpilot/api",
     "db:reset": "npm run db:reset -w @tenderpilot/api",
     "up": "docker compose up -d --build",
     "up:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",

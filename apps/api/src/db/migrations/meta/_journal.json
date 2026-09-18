@@ -29,6 +29,13 @@
       "when": 1789687570177,
       "tag": "0003_brainy_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789694429801,
+      "tag": "0004_owner_scoping",
+      "breakpoints": true
     }
   ]
 }

@@ -9,3 +9,4 @@ apps/api/src/db/seed/data
 .env
 .env.*
 !.env.example
+uploads

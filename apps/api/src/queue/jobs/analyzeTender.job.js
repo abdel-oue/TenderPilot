@@ -17,14 +17,14 @@ function getService() {
 }
 
 /**
- * @param {{ data: { runId: string, tenderId: string } }} job
+ * @param {{ data: { runId: string, tenderId: string, ownerId: string } }} job
  * @returns {Promise<{ verdict: string|null }>}
  */
 export async function processAnalysis(job) {
-  const { runId, tenderId } = job.data;
+  const { runId, tenderId, ownerId } = job.data;
   logger.info({ jobId: job.id, runId, tenderId }, 'job: analysis start');
 
-  const state = await getService().execute(runId, tenderId);
+  const state = await getService().execute(runId, tenderId, ownerId);
 
   logger.info({ jobId: job.id, runId, verdict: state?.verdict }, 'job: analysis done');
   return { verdict: state?.verdict ?? null };

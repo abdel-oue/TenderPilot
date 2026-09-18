@@ -48,6 +48,9 @@ const append = { reducer: (previous = [], next = []) => [...previous, ...next], 
 const channels = {
   tenderId: replace,
   runId: replace,
+  // Whose dossier this is. Every node that touches company data reads it from
+  // here, so no node can widen the query to "all companies" by omission.
+  ownerId: replace,
   documents: { ...replace, default: () => [] },
   pages: { ...replace, default: () => [] },
   requirements: { ...replace, default: () => [] },

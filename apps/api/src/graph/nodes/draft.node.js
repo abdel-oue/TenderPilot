@@ -65,7 +65,7 @@ export async function draft(state) {
     try {
       const drafted = await writer.draft(
         { title: section.title, requirements: section.requirements, humanEdits, instructions },
-        { runId: state.runId, tenderId: state.tenderId },
+        { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId },
       );
       sections.push({
         key: section.key,

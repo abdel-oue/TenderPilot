@@ -32,14 +32,14 @@ function label(pages, extraction) {
 
 /**
  * Reads one document, using the cache when the bytes are unchanged.
- * @param {{ id: string, filePath: string }} document
+ * @param {{ id: string, ownerId: string, filePath: string, tenderId?: string|null, kind?: string }} document
  * @returns {Promise<{ documentId: string, pages: object[], extractionPath: string }>}
  */
 export async function ingestDocument(document) {
   const buffer = await readFile(document.filePath);
   const hash = hashFile(buffer);
 
-  const cached = await getCachedPages(hash);
+  const cached = await getCachedPages(hash, document.ownerId);
   if (cached) {
     logger.info({ documentId: cached.documentId }, 'ingest: cache hit');
     return { documentId: cached.documentId, pages: cached.pages, extractionPath: 'cached' };
@@ -65,6 +65,7 @@ export async function ingestDocument(document) {
   const labelled = label(pages, extractionPath);
 
   const saved = await documentsRepo.upsert({
+    ownerId: document.ownerId,
     tenderId: document.tenderId ?? null,
     kind: document.kind ?? 'avis',
     filePath: document.filePath,

@@ -4,6 +4,7 @@
  * a status code. No SQL, no business logic, no prompt text.
  */
 import AnalysisService from '../services/analysis.service.js';
+import ExportService from '../services/export.service.js';
 import {
   parseRunIdParam,
   parseSectionEditBody,
@@ -11,9 +12,13 @@ import {
 } from '../validators/analysis.validator.js';
 
 export default class AnalysisController {
-  /** @param {AnalysisService} [analysisService] injectable for tests */
-  constructor(analysisService = new AnalysisService()) {
+  /**
+   * @param {AnalysisService} [analysisService] injectable for tests
+   * @param {ExportService} [exportService]
+   */
+  constructor(analysisService = new AnalysisService(), exportService = new ExportService()) {
     this.analyses = analysisService;
+    this.exports = exportService;
   }
 
   /**
@@ -26,7 +31,7 @@ export default class AnalysisController {
    */
   async start(request, reply) {
     const { id } = parseTenderIdParam(request.params);
-    const run = await this.analyses.start(id);
+    const run = await this.analyses.start(id, request.user.id);
     return reply.code(202).send(run);
   }
 
@@ -40,7 +45,7 @@ export default class AnalysisController {
    */
   async get(request, reply) {
     const { id } = parseTenderIdParam(request.params);
-    return reply.send(await this.analyses.getByTender(id));
+    return reply.send(await this.analyses.getByTender(id, request.user.id));
   }
 
   /**
@@ -52,6 +57,26 @@ export default class AnalysisController {
   async saveSection(request, reply) {
     const { runId } = parseRunIdParam(request.params);
     const body = parseSectionEditBody(request.body);
-    return reply.send(await this.analyses.saveSectionEdit(runId, body));
+    return reply.send(await this.analyses.saveSectionEdit(runId, body, request.user.id));
+  }
+
+  /**
+   * GET /analyses/:runId/export.docx - EX-05.
+   * Sent as an attachment so the browser downloads it rather than trying to
+   * render a binary.
+   * @param {object} request
+   * @param {object} reply
+   * @returns {Promise<object>}
+   */
+  async exportDocx(request, reply) {
+    const { runId } = parseRunIdParam(request.params);
+    const { buffer, filename } = await this.exports.exportDocx(runId, request.user.id);
+    return reply
+      .header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      .header('content-disposition', 'attachment; filename="' + filename + '"')
+      .send(buffer);
   }
 }

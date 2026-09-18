@@ -19,11 +19,13 @@ export function hashFile(buffer) {
 /**
  * Previously extracted pages for these exact bytes, or null on a miss.
  * @param {string} hash
+ * @param {string} ownerId the cache is per owner: identical bytes uploaded by two
+ *   users are two documents, and returning the other one's id would leak it
  * @param {DocumentRepository} [documents] injectable for tests
  * @returns {Promise<{ documentId: string, pages: object[] }|null>}
  */
-export async function getCachedPages(hash, documents = new DocumentRepository()) {
-  const document = await documents.findByContentHash(hash);
+export async function getCachedPages(hash, ownerId, documents = new DocumentRepository()) {
+  const document = await documents.findByContentHash(hash, ownerId);
   if (!document || document.extractionPath === 'pending') return null;
 
   const chunks = await documents.findChunks(document.id);

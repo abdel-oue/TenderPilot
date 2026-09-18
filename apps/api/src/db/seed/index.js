@@ -5,21 +5,24 @@
 // from cwd: the seed runs from the repo root in dev and from /app/apps/api in
 // the container.
 //
+// ONE COMPANY PER USER, so everything the seed writes is owned by the demo user.
+// A second user signing up gets an empty app and imports their own - they will
+// not see a single row of this.
+//
 // NEVER: TRUNCATE, DROP, or an unfiltered DELETE. Destructive reset is db:reset.
 
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { companySchema } from '@tenderpilot/shared';
 import { closeDb } from '../client.js';
 import { logger } from '../../lib/logger.js';
 import { hashPassword } from '../../lib/password.js';
-import CompanyRepository from '../../repositories/company.repository.js';
+import CompanyService from '../../services/company.service.js';
 import DocumentRepository from '../../repositories/document.repository.js';
 import TenderRepository from '../../repositories/tender.repository.js';
 import UserRepository from '../../repositories/user.repository.js';
 
-const companies = new CompanyRepository();
+const company = new CompanyService();
 const documentsRepo = new DocumentRepository();
 const tendersRepo = new TenderRepository();
 const usersRepo = new UserRepository();
@@ -27,7 +30,7 @@ const usersRepo = new UserRepository();
 const DATA_DIR = join(import.meta.dirname, 'data');
 
 // Local fixture only, and the corpus is gitignored, so this is not a committed
-// credential. It exists because auth is out of scope but still gates the app.
+// credential. It exists because the demo needs a company to belong to.
 const DEMO_USER = { email: 'demo@tenderpilot.local', name: 'Demo', password: 'demo1234' };
 
 const tally = { created: 0, updated: 0, skipped: 0 };
@@ -40,103 +43,65 @@ async function hashFile(path) {
   return createHash('sha256').update(await readFile(path)).digest('hex');
 }
 
-/** @returns {Promise<void>} */
+/**
+ * Creates the demo user if missing, and returns it either way. Everything else
+ * the seed writes hangs off this id.
+ * @returns {Promise<string>} the demo user's id
+ */
 async function seedDemoUser() {
-  const row = await usersRepo.insert({
+  const created = await usersRepo.insert({
     email: DEMO_USER.email,
     name: DEMO_USER.name,
     passwordHash: await hashPassword(DEMO_USER.password),
   });
-  if (row) {
+
+  if (created) {
     tally.created += 1;
     logger.info({ email: DEMO_USER.email }, 'seed: demo user created');
-  } else {
-    tally.skipped += 1;
+    return created.id;
   }
+
+  tally.skipped += 1;
+  const existing = await usersRepo.findByEmailWithHash(DEMO_USER.email);
+  return existing.id;
 }
 
 /**
  * profil-entreprise.json is an input boundary like any other: parsed before it
- * is inserted, never trusted because it shipped with the repo.
+ * is inserted, never trusted because it shipped with the repo. The parsing and
+ * the mapping both live in CompanyService, which is also what the api's import
+ * endpoint calls - one definition, not two.
+ * @param {string} ownerId
  * @returns {Promise<void>}
  */
-async function seedCompany() {
+async function seedCompany(ownerId) {
   const raw = JSON.parse(await readFile(join(DATA_DIR, 'profil-entreprise.json'), 'utf8'));
-  const parsed = companySchema.safeParse(raw);
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => i.path.join('.') + ': ' + i.message).join('\n');
-    throw new Error('profil-entreprise.json is invalid:\n' + issues);
-  }
-  const company = parsed.data;
+  const summary = await company.importProfile(ownerId, raw);
 
-  // references.csv and equipe.csv hold the same rows as the JSON - one source,
-  // not three.
-  await companies.upsertProfile({
-    ice: company.ice,
-    raisonSociale: company.raison_sociale,
-    formeJuridique: company.forme_juridique,
-    rc: company.rc,
-    ifFiscal: company.if_fiscal,
-    cnss: company.cnss,
-    siege: company.siege,
-    creation: company.creation,
-    effectif: company.effectif,
-    chiffreAffaires: company.chiffre_affaires_ht_mad,
-    certifications: company.certifications,
-    attestations: company.attestations_disponibles,
-    secteurs: company.secteurs_couverts,
-    updatedAt: new Date(),
-  });
-
-  await companies.upsertReferences(
-    company.references.map((r) => ({
-      id: r.id,
-      client: r.client,
-      secteur: r.secteur,
-      objet: r.objet,
-      montantHtMad: String(r.montant_ht_mad),
-      anneeDebut: r.annee_debut,
-      dureeMois: r.duree_mois,
-      attestationBonneExecution: r.attestation_bonne_execution,
-    })),
-  );
-
-  await companies.upsertTeamMembers(
-    company.equipe.map((m) => ({
-      id: m.id,
-      initiales: m.initiales,
-      poste: m.poste,
-      anneesExperience: m.annees_experience,
-      diplome: m.diplome,
-      certifications: m.certifications,
-      langues: m.langues,
-    })),
-  );
-
-  tally.updated += 1 + company.references.length + company.equipe.length;
-  logger.info(
-    { references: company.references.length, team: company.equipe.length },
-    'seed: company profile upserted',
-  );
+  tally.updated += 1 + summary.references + summary.team;
+  logger.info(summary, 'seed: company profile upserted');
 }
 
 /**
  * Registers each dossier as a tender + its PDF as a document. Extraction does
  * NOT happen here - the ingest node owns that, and the content hash written
  * here is what lets it skip a file it has already read.
+ * @param {string} ownerId
  * @returns {Promise<void>}
  */
-async function seedTenders() {
+async function seedTenders(ownerId) {
   const files = (await readdir(join(DATA_DIR, 'avis'))).filter((f) => f.endsWith('.pdf')).sort();
 
   for (const file of files) {
     const reference = basename(file, '.pdf');
     const path = join(DATA_DIR, 'avis', file);
-    const tender = await tendersRepo.upsert({ reference, title: null, status: 'pending' });
+    const tender = await tendersRepo.upsert({ ownerId, reference, title: null, status: 'pending' });
     await documentsRepo.upsert({
+      ownerId,
       tenderId: tender.id,
       kind: 'avis',
       filePath: path,
+      originalName: file,
       contentHash: await hashFile(path),
       extractionPath: 'pending',
       pageCount: 0,
@@ -149,9 +114,14 @@ async function seedTenders() {
 /**
  * The company's own supporting documents: attestations and the two past memos
  * the Writer is meant to cite. No tenderId - they belong to the company.
+ *
+ * Registered here, INDEXED by `npm run db:index`. Indexing means OCR plus
+ * embeddings, which is real quota and real minutes; putting it in the seed would
+ * mean every container restart paid for it again.
+ * @param {string} ownerId
  * @returns {Promise<void>}
  */
-async function seedCompanyDocuments() {
+async function seedCompanyDocuments(ownerId) {
   const groups = [
     { dir: 'attestations', kind: 'attestation' },
     { dir: 'offres-passees', kind: 'memoire' },
@@ -164,9 +134,11 @@ async function seedCompanyDocuments() {
     for (const file of files) {
       const path = join(DATA_DIR, group.dir, file);
       await documentsRepo.upsert({
+        ownerId,
         tenderId: null,
         kind: group.kind,
         filePath: path,
+        originalName: file,
         contentHash: await hashFile(path),
         extractionPath: 'pending',
         pageCount: 0,
@@ -180,12 +152,12 @@ async function seedCompanyDocuments() {
 /** @returns {Promise<void>} */
 async function main() {
   logger.info({ dataDir: DATA_DIR }, 'seed: starting');
-  await seedDemoUser();
-  await seedCompany();
-  await seedTenders();
-  await seedCompanyDocuments();
+  const ownerId = await seedDemoUser();
+  await seedCompany(ownerId);
+  await seedTenders(ownerId);
+  await seedCompanyDocuments(ownerId);
   // Silence is not a success report.
-  logger.info(tally, 'seed: done');
+  logger.info({ ...tally, ownerId }, 'seed: done');
 }
 
 try {

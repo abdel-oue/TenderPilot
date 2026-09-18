@@ -26,6 +26,9 @@ export const traceEntrySchema = z.object({
 export const graphStateSchema = z.object({
   tenderId: z.string(),
   runId: z.string(),
+  // One company per user: the nodes that read the company profile or search the
+  // company corpus scope on this, never on "the" company.
+  ownerId: z.string(),
   documents: z.array(z.object({ id: z.string(), kind: z.string(), pageCount: z.number().int() })),
   pages: z.array(extractedPageSchema),
   requirements: z.array(requirementSchema),

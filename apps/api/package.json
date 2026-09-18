@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=../../.env src/db/migrate.js",
     "db:seed": "node --env-file=../../.env src/db/seed/index.js",
+    "db:index": "node --env-file=../../.env src/db/reindex.js",
     "db:reset": "node --env-file=../../.env src/db/seed/reset.js"
   },
   "dependencies": {

@@ -55,6 +55,12 @@ COPY packages/shared/src packages/shared/src
 COPY apps/api/src apps/api/src
 COPY apps/api/drizzle.config.js apps/api/
 
+# The uploads volume mounts here. Created and chowned BEFORE the volume is
+# declared so docker copies this ownership onto the new volume - otherwise it is
+# root-owned and the non-root user cannot write a single upload.
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+VOLUME /app/uploads
+
 USER node
 WORKDIR /app/apps/api
 EXPOSE 3000

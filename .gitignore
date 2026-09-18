@@ -45,3 +45,6 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# User uploads (EX-01). Runtime data, never committed.
+/uploads/

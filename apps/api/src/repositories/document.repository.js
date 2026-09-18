@@ -2,7 +2,7 @@
  * Document Repository
  * ALL document + chunk SQL, including the pgvector similarity search.
  */
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { documentChunks, documents } from '../db/schema/index.js';
 
@@ -17,13 +17,15 @@ export default class DocumentRepository {
    * never read twice, which is what keeps prompt iteration fast when OCR costs
    * ~10s a page.
    * @param {string} hash sha256 of the file bytes
+   * @param {string} ownerId scoped: a cache hit must never hand back another
+   *   user's documentId, which is what a global hash lookup would do
    * @returns {Promise<object|undefined>}
    */
-  async findByContentHash(hash) {
+  async findByContentHash(hash, ownerId) {
     const [row] = await this.db
       .select()
       .from(documents)
-      .where(eq(documents.contentHash, hash))
+      .where(and(eq(documents.contentHash, hash), eq(documents.ownerId, ownerId)))
       .limit(1);
     return row;
   }
@@ -46,15 +48,45 @@ export default class DocumentRepository {
   }
 
   /**
-   * @param {string} kind
-   * @returns {Promise<object[]>}
+   * @param {string} id
+   * @param {string} ownerId
+   * @returns {Promise<object|undefined>}
    */
-  async findByKind(kind) {
-    return this.db.select().from(documents).where(eq(documents.kind, kind));
+  async findByIdForOwner(id, ownerId) {
+    const [row] = await this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.ownerId, ownerId)))
+      .limit(1);
+    return row;
   }
 
   /**
-   * Upserts on contentHash, so re-seeding the same corpus is a no-op.
+   * The company's own corpus: attestations, past memoires, the profil. These have
+   * tenderId NULL - they belong to the company, not to one dossier - and they are
+   * what search_company_docs reads. Without them the Writer has nothing real to
+   * cite and every section comes back marked for a human.
+   * @param {string} ownerId
+   * @param {string[]} [kinds]
+   * @returns {Promise<object[]>}
+   */
+  async findCompanyDocuments(ownerId, kinds = ['memoire', 'attestation', 'profil']) {
+    return this.db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.ownerId, ownerId),
+          isNull(documents.tenderId),
+          inArray(documents.kind, kinds),
+        ),
+      )
+      .orderBy(asc(documents.createdAt));
+  }
+
+  /**
+   * Upserts on (ownerId, contentHash), so re-seeding or re-uploading the same
+   * file is a no-op rather than a duplicate row.
    * @param {object} values
    * @returns {Promise<object>}
    */
@@ -63,11 +95,30 @@ export default class DocumentRepository {
       .insert(documents)
       .values(values)
       .onConflictDoUpdate({
-        target: documents.contentHash,
-        set: { pageCount: values.pageCount, extractionPath: values.extractionPath },
+        target: [documents.ownerId, documents.contentHash],
+        set: {
+          pageCount: values.pageCount,
+          extractionPath: values.extractionPath,
+          // A file re-uploaded against a dossier stops being loose company
+          // material, so these two follow the newest upload.
+          tenderId: values.tenderId ?? null,
+          kind: values.kind,
+        },
       })
       .returning();
     return row;
+  }
+
+  /**
+   * Chunks with no embedding yet - the work list for the indexing service.
+   * @param {string} documentId
+   * @returns {Promise<object[]>}
+   */
+  async findUnembeddedChunks(documentId) {
+    return this.db
+      .select({ id: documentChunks.id, content: documentChunks.content })
+      .from(documentChunks)
+      .where(and(eq(documentChunks.documentId, documentId), isNull(documentChunks.embedding)));
   }
 
   /**
@@ -119,11 +170,13 @@ export default class DocumentRepository {
    * Raw sql`` is allowed here and only here: pgvector's `<=>` operator has no
    * representation in the drizzle query builder.
    * @param {number[]} embedding
+   * @param {string} ownerId one company's corpus only - a citation lifted from
+   *   another company's memoire would be the exact hallucination EX-03 guards against
    * @param {number} [k]
    * @param {string[]} [kinds] restrict to document kinds, e.g. ['memoire']
    * @returns {Promise<object[]>}
    */
-  async searchSimilarChunks(embedding, k = 8, kinds) {
+  async searchSimilarChunks(embedding, ownerId, k = 8, kinds) {
     const vector = sql.raw("'[" + embedding.join(',') + "]'::vector");
     const kindFilter = kinds?.length
       ? sql`and d.kind in (${sql.join(kinds.map((kind) => sql`${kind}`), sql`, `)})`
@@ -134,7 +187,7 @@ export default class DocumentRepository {
              c.embedding <=> ${vector} as distance
       from document_chunks c
       join documents d on d.id = c.document_id
-      where c.embedding is not null ${kindFilter}
+      where c.embedding is not null and d.owner_id = ${ownerId} ${kindFilter}
       order by distance asc
       limit ${k}
     `);

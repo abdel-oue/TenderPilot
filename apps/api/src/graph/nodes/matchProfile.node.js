@@ -17,16 +17,22 @@ export async function matchProfile(state) {
     return { matches: [], errors: [{ node: 'matchProfile', message: 'aucune exigence à évaluer' }] };
   }
 
+  // One company per user, so the profile is fetched by the dossier's owner.
   const [profile, references, team] = await Promise.all([
-    companies.getProfile(),
-    companies.findAllReferences(),
-    companies.findAllTeam(),
+    companies.getProfile(state.ownerId),
+    companies.findAllReferences(state.ownerId),
+    companies.findAllTeam(state.ownerId),
   ]);
 
   if (!profile) {
     return {
       matches: [],
-      errors: [{ node: 'matchProfile', message: 'profil entreprise absent : lancez db:seed' }],
+      errors: [
+        {
+          node: 'matchProfile',
+          message: "profil entreprise absent : importez votre profil avant d'analyser",
+        },
+      ],
     };
   }
 

@@ -11,6 +11,9 @@ import { createHash } from 'node:crypto';
 import { env } from '../lib/env.js';
 
 export const ANALYSIS_QUEUE = 'analysis';
+// Indexing a freshly uploaded company document is OCR + embeddings: a minute of
+// work that has no business sitting inside the upload request.
+export const INDEX_QUEUE = 'index';
 
 // ioredis needs this to be null for BullMQ blocking commands.
 export const connection = { url: env.REDIS_URL, maxRetriesPerRequest: null };
@@ -23,6 +26,7 @@ const defaultJobOptions = {
 };
 
 export const analysisQueue = new Queue(ANALYSIS_QUEUE, { connection, defaultJobOptions });
+export const indexQueue = new Queue(INDEX_QUEUE, { connection, defaultJobOptions });
 
 /**
  * Idempotency key. BullMQ dedupes on jobId natively, so double-clicking
@@ -41,7 +45,17 @@ export function analysisJobId(tenderId, graphVersion, runId) {
     .slice(0, 32);
 }
 
+/**
+ * Deduplicates on the document itself, so uploading the same file twice in a row
+ * queues one indexing job, not two.
+ * @param {string} documentId
+ * @returns {string}
+ */
+export function indexJobId(documentId) {
+  return 'index:' + documentId;
+}
+
 /** @returns {Promise<void>} */
 export async function closeQueues() {
-  await analysisQueue.close();
+  await Promise.all([analysisQueue.close(), indexQueue.close()]);
 }

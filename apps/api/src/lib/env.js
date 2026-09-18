@@ -44,6 +44,13 @@ const envSchema = z.object({
 
   OCR_LANG: z.string().min(2).default('fra'),
 
+  // Where uploaded PDFs land. Relative values resolve against the repo root
+  // (see lib/uploads.js) so dev and container agree without a second variable.
+  UPLOAD_DIR: z.string().min(1).default('uploads'),
+  // Per-file ceiling. A dossier is a 60-100 page PDF; 25 MB is generous for that
+  // and small enough that a mistyped upload cannot fill the disk.
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(25),
+
   // '1' stubs both providers at the LlmService boundary so E2E runs are
   // deterministic and burn no shared quota.
   STUB_LLM: z

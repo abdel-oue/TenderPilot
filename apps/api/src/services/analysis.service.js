@@ -41,10 +41,11 @@ export default class AnalysisService {
    * api restart silently lost every analysis in flight with nothing to retry it.
    *
    * @param {string} tenderId
+   * @param {string} ownerId
    * @returns {Promise<{ runId: string, tenderId: string, status: string }>}
    */
-  async start(tenderId) {
-    const tender = await this.tenders.findById(tenderId);
+  async start(tenderId, ownerId) {
+    const tender = await this.tenders.findById(tenderId, ownerId);
     if (!tender) throw appError('Appel d offres introuvable.', 'TENDER_NOT_FOUND', 404);
 
     const existing = await this.analyses.findLatestRun(tenderId);
@@ -57,9 +58,12 @@ export default class AnalysisService {
     const run = await this.analyses.createRun(tenderId, GRAPH_VERSION);
     await this.tenders.updateStatus(tenderId, 'analyzing');
 
+    // ownerId travels with the job: the worker is a separate process with no
+    // session, so this is the only way the graph knows whose company to match
+    // against.
     await this.queue.add(
       'analyze',
-      { runId: run.id, tenderId },
+      { runId: run.id, tenderId, ownerId },
       { jobId: analysisJobId(tenderId, GRAPH_VERSION, run.id) },
     );
     logger.info({ runId: run.id, tenderId }, 'analysis: queued');
@@ -71,9 +75,10 @@ export default class AnalysisService {
    * Runs the graph to completion and persists the result.
    * @param {string} runId
    * @param {string} tenderId
+   * @param {string} ownerId
    * @returns {Promise<object>} the final graph state
    */
-  async execute(runId, tenderId) {
+  async execute(runId, tenderId, ownerId) {
     return runWithContext({ requestId: runId }, async () => {
       setContext({ runId, tenderId });
       await this.analyses.updateRun(runId, { status: 'running' });
@@ -81,7 +86,7 @@ export default class AnalysisService {
       try {
         const graph = await this.getGraph();
         const state = await graph.invoke(
-          { tenderId, runId },
+          { tenderId, runId, ownerId },
           {
             // Keyed on the graph version so a checkpoint from an older graph is
             // never resumed into a newer one.
@@ -124,9 +129,13 @@ export default class AnalysisService {
    * The current state of a tender's analysis: status, trace, and the result when
    * there is one. This is what the UI polls.
    * @param {string} tenderId
+   * @param {string} ownerId
    * @returns {Promise<object>}
    */
-  async getByTender(tenderId) {
+  async getByTender(tenderId, ownerId) {
+    const tender = await this.tenders.findById(tenderId, ownerId);
+    if (!tender) throw appError('Appel d offres introuvable.', 'TENDER_NOT_FOUND', 404);
+
     const run = await this.analyses.findLatestRun(tenderId);
     if (!run) throw appError('Aucune analyse pour cet appel d offres.', 'ANALYSIS_NOT_FOUND', 404);
 
@@ -154,11 +163,11 @@ export default class AnalysisService {
    * reads it back and aligns with it.
    * @param {string} runId
    * @param {{ sectionKey: string, title: string, content: string }} input
+   * @param {string} ownerId
    * @returns {Promise<object>}
    */
-  async saveSectionEdit(runId, input) {
-    const run = await this.analyses.findRunById(runId);
-    if (!run) throw appError('Analyse introuvable.', 'ANALYSIS_NOT_FOUND', 404);
+  async saveSectionEdit(runId, input, ownerId) {
+    await this.findOwnedRun(runId, ownerId);
 
     return this.analyses.upsertSection({
       runId,
@@ -167,5 +176,20 @@ export default class AnalysisService {
       content: input.content,
       editedByHuman: true,
     });
+  }
+
+  /**
+   * A run, but only if the tender behind it belongs to this user. Shared by the
+   * section edit (EX-06) and the DOCX export (EX-05) so the ownership check lives
+   * in one place rather than being re-derived at each call site.
+   * @param {string} runId
+   * @param {string} ownerId
+   * @returns {Promise<object>} throws ANALYSIS_NOT_FOUND
+   */
+  async findOwnedRun(runId, ownerId) {
+    const run = await this.analyses.findRunById(runId);
+    const tender = run ? await this.tenders.findById(run.tenderId, ownerId) : null;
+    if (!run || !tender) throw appError('Analyse introuvable.', 'ANALYSIS_NOT_FOUND', 404);
+    return run;
   }
 }

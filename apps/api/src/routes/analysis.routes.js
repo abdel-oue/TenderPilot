@@ -1,6 +1,7 @@
 /**
  * Analysis routes. Dispatch only - the controller does the work.
  */
+import { requireAuth } from '../lib/session.js';
 import AnalysisController from '../controllers/analysis.controller.js';
 
 /**
@@ -10,7 +11,10 @@ import AnalysisController from '../controllers/analysis.controller.js';
 export default async function analysisRoutes(app) {
   const controller = new AnalysisController();
 
+  app.addHook('preHandler', requireAuth);
+
   app.post('/tenders/:id/analyze', (request, reply) => controller.start(request, reply));
   app.get('/tenders/:id/analysis', (request, reply) => controller.get(request, reply));
   app.patch('/analyses/:runId/sections', (request, reply) => controller.saveSection(request, reply));
+  app.get('/analyses/:runId/export.docx', (request, reply) => controller.exportDocx(request, reply));
 }

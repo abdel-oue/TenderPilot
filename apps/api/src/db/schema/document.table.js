@@ -1,19 +1,38 @@
-import { index, integer, pgTable, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, timestamp, unique, uuid, vector } from 'drizzle-orm/pg-core';
 import { tenders } from './tender.table.js';
+import { users } from './user.table.js';
 
-// `contentHash` unique IS the parse cache: the same bytes are never OCR'd twice.
-// Each OCR pass is ~a minute, and you will re-run the same PDF fifty times while
-// tuning prompts.
-export const documents = pgTable('documents', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenderId: uuid('tender_id').references(() => tenders.id, { onDelete: 'cascade' }),
-  kind: text('kind').notNull(), // avis|cps|reglement|bpu|planning|attestation|memoire|profil
-  filePath: text('file_path').notNull(),
-  contentHash: text('content_hash').notNull().unique(),
-  extractionPath: text('extraction_path').notNull(), // text_layer|ocr|mixed
-  pageCount: integer('page_count').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// `ownerId` is on the document itself, not inferred through the tender, because
+// COMPANY documents (attestations, memoires, profil) have tenderId = NULL. They
+// belong to the company, not to any one dossier — and they are exactly what the
+// Writer searches to cite a real reference.
+//
+// (ownerId, contentHash) unique IS the parse cache: the same bytes are never
+// OCR'd twice for the same user. Scoped rather than global, because a global
+// unique would hand user B a documentId belonging to user A on a cache hit.
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tenderId: uuid('tender_id').references(() => tenders.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(), // avis|cps|reglement|bpu|planning|attestation|memoire|profil
+    filePath: text('file_path').notNull(),
+    // The name the user's file had when they dropped it. filePath is content
+    // addressed (<hash>.pdf), so without this the UI has nothing to display.
+    originalName: text('original_name'),
+    contentHash: text('content_hash').notNull(),
+    extractionPath: text('extraction_path').notNull(), // text_layer|ocr|mixed|pending
+    pageCount: integer('page_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('documents_owner_hash_unique').on(table.ownerId, table.contentHash),
+    index('documents_owner_kind_idx').on(table.ownerId, table.kind),
+  ],
+);
 
 // embedder-small-3 at 512 dimensions, as provisioned for the hackathon. A vector
 // column's width is fixed in the DDL, so this constant and EMBEDDING_DIMENSIONS in
