@@ -19,7 +19,7 @@ const RINGS = [
 
 export function HeroSection({ copy }: HeroSectionProps) {
   return (
-    <section className="relative pt-31 pb-14 text-center sm:pt-35 md:pt-42 md:pb-18" aria-labelledby="hero-title" data-testid="hero">
+    <section className="relative pt-27 pb-14 text-center sm:pt-31 md:pt-36 md:pb-18" aria-labelledby="hero-title" data-testid="hero">
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-75" aria-hidden="true">
         {RINGS.map((ring) => (
           <i key={ring} className={cn("absolute left-1/2 -rotate-15 rounded-full border border-line", ring)} />

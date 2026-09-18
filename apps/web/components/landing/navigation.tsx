@@ -31,24 +31,23 @@ export function Navigation({ copy, locale }: NavigationProps) {
       <a className="fixed -top-25 left-5 z-100 bg-surface p-3 focus:top-3" href="#main">{copy.skip}</a>
       <Container
         as="nav"
-        className="flex h-18 items-center gap-1 sm:gap-2.5 md:h-21 md:gap-4 lg:gap-5.5"
+        className="grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-2 md:h-15"
         aria-label={locale === "fr" ? "Navigation principale" : "Main navigation"}
       >
-        <a href="#top" className="mr-auto shrink-0" aria-label={copy.home} data-testid="header-logo"><BrandLogo /></a>
-        <div className="hidden md:mx-auto md:flex md:gap-4 lg:gap-6">
+        <a href="#top" className="w-fit shrink-0" aria-label={copy.home} data-testid="header-logo"><BrandLogo /></a>
+        <div className="hidden justify-self-center md:flex md:gap-5 lg:gap-7">
           {copy.nav.map((label, index) => (
             <a key={label} href={NAV_TARGETS[index]} className="text-tiny whitespace-nowrap text-muted hover:text-foreground">{label}</a>
           ))}
         </div>
-        <PreferenceControls copy={copy} locale={locale} />
-        <a href="/login" className="hidden text-tiny whitespace-nowrap text-muted hover:text-foreground md:inline" data-testid="header-login">
-          {locale === "fr" ? "Se connecter" : "Sign in"}
-        </a>
-        <Button variant="primary" href="/signup" data-testid="nav-start" className="hidden min-h-10 px-4 py-2.5 text-tiny lg:inline-flex">
-          {copy.discover}
-          <ArrowUpRight size={15} />
-        </Button>
-        <button ref={buttonRef} className={cn(ICON_BUTTON, "md:hidden")} aria-expanded={open} aria-controls="mobile-navigation" aria-label={open ? copy.close : copy.menu} onClick={() => setOpen(!open)} data-testid="mobile-toggle">{open ? <X size={21} /> : <Menu size={21} />}</button>
+        <div className="col-start-3 flex items-center justify-end gap-1 justify-self-end sm:gap-2">
+          <PreferenceControls copy={copy} locale={locale} />
+          <Button variant="primary" href="/login" data-testid="header-login" className="min-h-9 shrink-0 gap-2 px-3.5 py-2 text-tiny sm:px-4">
+            {locale === "fr" ? "Connexion" : "Sign in"}
+            <ArrowUpRight size={15} />
+          </Button>
+          <button ref={buttonRef} className={cn(ICON_BUTTON, "md:hidden")} aria-expanded={open} aria-controls="mobile-navigation" aria-label={open ? copy.close : copy.menu} onClick={() => setOpen(!open)} data-testid="mobile-toggle">{open ? <X size={19} /> : <Menu size={19} />}</button>
+        </div>
       </Container>
       <div
         id="mobile-navigation"
@@ -59,9 +58,6 @@ export function Navigation({ copy, locale }: NavigationProps) {
         {copy.nav.map((label, index) => (
           <a key={label} href={NAV_TARGETS[index]} onClick={() => setOpen(false)} className="py-2.5 text-base" data-testid={`mobile-link-${index}`}>{label}</a>
         ))}
-        <a href="/login" onClick={() => setOpen(false)} className="py-2.5 text-base" data-testid="mobile-login">
-          {locale === "fr" ? "Se connecter" : "Sign in"}
-        </a>
         <Button variant="primary" href="/signup" data-testid="mobile-start" onClick={() => setOpen(false)}>
           {copy.discover}
           <ArrowUpRight size={16} />

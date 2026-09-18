@@ -15,6 +15,7 @@ test("shows French by default with the template section sequence and working log
 
 test("switches language throughout the page and remembers the choice", async ({ page }) => {
   await page.goto("/");
+  await page.getByTestId("language-toggle").click();
   await page.getByTestId("language-en").click();
   await expect(page.getByTestId("landing")).toHaveAttribute("lang", "en");
   await expect(page.getByTestId("hero-title")).toContainText("Complex tenders.");
@@ -22,6 +23,7 @@ test("switches language throughout the page and remembers the choice", async ({ 
   await expect(page.getByTestId("footer")).toContainText("All rights reserved.");
   await page.goto("/");
   await expect(page.getByTestId("landing")).toHaveAttribute("lang", "en");
+  await page.getByTestId("language-toggle").click();
   await page.getByTestId("language-fr").click();
   await expect(page.getByTestId("landing")).toHaveAttribute("lang", "fr");
   await expect(page.getByTestId("analysis-tab-0")).toHaveText("Synthèse");
@@ -36,6 +38,7 @@ test("switches theme, adapts the logo and persists the preference", async ({ pag
   expect(darkFilter).not.toBe(lightFilter);
   await page.reload();
   await expect(page.getByTestId("theme-light")).toBeVisible();
+  await page.getByTestId("language-toggle").click();
   await page.getByTestId("language-en").click();
   await expect(page.getByTestId("theme-light")).toBeVisible();
   await page.getByTestId("theme-light").click();
@@ -65,7 +68,7 @@ test("keeps English content and controls in view at narrow widths in either them
   await page.setViewportSize({ width: isMobile ? 320 : 768, height: 900 });
   await page.goto("/?lang=en");
   await expect(page.getByTestId("landing")).toHaveAttribute("lang", "en");
-  await expect(page.getByTestId("language-en")).toBeVisible();
+  await expect(page.getByTestId("language-toggle")).toBeVisible();
   await expect(page.getByTestId("hero-demo")).toBeVisible();
   for (const theme of ["dark", "light"]) {
     await page.getByTestId(`theme-${theme}`).click();

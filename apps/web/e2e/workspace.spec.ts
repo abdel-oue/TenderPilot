@@ -115,14 +115,17 @@ test("reports invalid company profile files without sending them", async ({ page
   expect(state.posts).toEqual([]);
 });
 
-test("persists theme and logs out without retaining the old dashboard", async ({ page }) => {
+test("persists theme and logs out without retaining the old dashboard", async ({ page, isMobile }) => {
   const state = await mockWorkspaceApi(page);
-  await page.goto("/dashboard/settings");
-  await page.getByTestId("settings-dark").click();
+  await page.goto("/dashboard");
+  await page.getByTestId("workspace-theme").click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.reload();
   await expect(page.locator("html")).toHaveClass(/dark/);
-  await page.getByTestId("workspace-logout").click();
+  if (isMobile) await page.getByTestId("workspace-menu").click();
+  const scope = isMobile ? "mobile-" : "";
+  await page.getByTestId(`${scope}workspace-account`).click();
+  await page.getByTestId(`${scope}workspace-logout`).click();
   await expect(page.getByTestId("auth-panel")).toBeVisible();
   expect(state.signedIn).toBe(false);
   state.empty = true;

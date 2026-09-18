@@ -51,6 +51,14 @@ Les deux hôtes partagent le domaine `ouedghiri.dev`, donc le cookie de session
 reste `SameSite=Lax` : les appels du front vers l'api sont *same-site*. Un front
 sur une URL `*.vercel.app` casserait ça.
 
+Si `POSTGRES_PASSWORD` change dans `.env` après la première création du volume,
+Postgres garde l'ancien mot de passe et l'api démarre sur `migrations failed`
+(`28P01`). Aligner le rôle, sans toucher aux données :
+
+```bash
+docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot   -c "ALTER USER tenderpilot WITH PASSWORD '<valeur de .env>'"
+```
+
 Détails, variables, mise en production et diagnostic :
 **[docs/deployment.md](docs/deployment.md)**.
 
@@ -62,8 +70,17 @@ Détails, variables, mise en production et diagnostic :
   échéances à venir et progression des analyses.
 - `/tenders` : recherche et filtres ; `/tenders/new` : dépôt PDF avec reprise
   après une erreur d’envoi, sans recréer le dossier dans la même session.
-- Sidebar responsive, menu mobile au clavier, transitions avec mouvement réduit,
-  thème clair / sombre, guide et paramètres du compte.
+- Coque à fond unique : la barre latérale et la barre du haut flottent sur le même
+  fond, sans panneau ni filet. Barre du haut en trois zones — fil d'Ariane, logo au
+  centre, thème et **Nouveau dossier** à droite.
+- Barre latérale centrée (icône + libellé), menu mobile au clavier, transitions avec
+  mouvement réduit. Le compte est en bas : avatar, nom et e-mail ; un clic ouvre la
+  déconnexion. Il n'y a plus d'écran Paramètres, le thème est dans la barre du haut.
+- `/dashboard/controle` : **Contrôle**, la page qui affichera le raisonnement de
+  l'IA, les jetons consommés et le temps passé. La trace du graphe ne porte pas
+  encore ces mesures, la page dit ce qu'elle attend plutôt que d'inventer un chiffre.
+- Vitrine : barre de navigation compacte, liens centrés, sélecteur de langue en
+  icône globe avec menu déroulant, et un seul bouton d'action visible, **Connexion**.
 - `/company` : import du profil depuis un fichier JSON et documents de référence.
 - `/tenders/[id]` : le verdict, les points bloquants cités page et article, le
   **détail de la notation** critère par critère, les risques que l'agent a signalés

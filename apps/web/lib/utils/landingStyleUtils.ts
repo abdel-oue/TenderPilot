@@ -10,4 +10,4 @@ export const NOTE = "mt-4.5 text-xs text-muted";
 export const STATUS_DOT = "inline-block size-1.5 shrink-0 rounded-full bg-positive";
 export const TEXT_LINK = "mt-6 inline-flex cursor-pointer items-center gap-3 bg-transparent p-0 text-left text-sm font-semibold hover:text-accent";
 export const PREVIEW_FOOTER = "flex items-center gap-2 border-t border-border bg-background px-6 py-4 text-mini text-muted";
-export const ICON_BUTTON = "inline-flex size-9 cursor-pointer items-center justify-center rounded-sm bg-transparent hover:bg-soft";
+export const ICON_BUTTON = "inline-flex size-8 cursor-pointer items-center justify-center rounded-sm bg-transparent hover:bg-soft";
