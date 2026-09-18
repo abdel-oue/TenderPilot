@@ -85,3 +85,33 @@ export function renderComplianceTask(section) {
     section.content,
   ].join('\n');
 }
+
+export const WRITER_PLAN_SYSTEM = `Avant de rediger, tu decides ce que tu dois chercher
+dans les documents de l'entreprise (memoires techniques deja rendus, attestations,
+profil) pour appuyer cette section.
+
+Ecris 1 a 3 requetes de recherche, en francais, dans TES mots :
+- une requete porte sur ce qu'il te manque, pas sur le titre de la section ;
+- emploie le vocabulaire qui figurerait dans le document recherche (un poste, une
+  certification, un secteur, un type de mission), pas des mots de formulaire ;
+- deux requetes ne doivent pas chercher la meme chose.
+
+Reponds UNIQUEMENT en JSON : {"queries": string[]}.`;
+
+/**
+ * @param {object} context section title, requirements, alreadyTried
+ * @returns {string}
+ */
+export function renderPlanTask(context) {
+  const tried = context.alreadyTried?.length
+    ? ['', 'DEJA CHERCHE SANS RESULTAT (ne le redemande pas) :', ...context.alreadyTried.map((q) => '- ' + q)]
+    : [];
+
+  return [
+    'SECTION A REDIGER : ' + context.title,
+    '',
+    'EXIGENCES A APPUYER :',
+    ...context.requirements.map((r) => '- ' + r.text),
+    ...tried,
+  ].join('\n');
+}

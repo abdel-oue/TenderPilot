@@ -10,6 +10,13 @@ export const draftedSectionSchema = z.object({
   needsHuman: z.boolean(),
 });
 
+// The Writer's own search plan. The queries are the model's words, not a
+// template built from the section title: it is the agent deciding what it does
+// not know yet.
+export const searchPlanSchema = z.object({
+  queries: z.array(z.string().min(3)).min(1).max(3),
+});
+
 export const complianceVerdictSchema = z.object({
   approved: z.boolean(),
   reasons: z.array(z.string()),
@@ -23,6 +30,10 @@ export const WRITER_STUB = {
     'pour ce poste.',
   citations: [],
   needsHuman: true,
+};
+
+export const SEARCH_PLAN_STUB = {
+  queries: ['moyens humains chef de projet experience'],
 };
 
 export const COMPLIANCE_STUB = {

@@ -12,8 +12,13 @@
  */
 import LlmService, { TIERS } from '../services/llm.service.js';
 import ToolsService from '../services/tools.service.js';
-import { WRITER_SYSTEM, renderWriterTask } from '../prompts/writer.prompts.js';
-import { WRITER_STUB, draftedSectionSchema } from './writer.schema.js';
+import {
+  WRITER_PLAN_SYSTEM,
+  WRITER_SYSTEM,
+  renderPlanTask,
+  renderWriterTask,
+} from '../prompts/writer.prompts.js';
+import { SEARCH_PLAN_STUB, WRITER_STUB, draftedSectionSchema, searchPlanSchema } from './writer.schema.js';
 
 const MAX_TOOL_ROUNDS = 3;
 
@@ -39,10 +44,11 @@ export default class WriterAgent {
     // once. Every tool result is recorded so the trace shows what it actually
     // looked at - and so a retry can read it back through get_run_history.
     let evidence = '';
-    for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
-      const query = this.planQuery(context, round);
-      if (!query) break;
-
+    // One planning call, up to MAX_TOOL_ROUNDS distinct queries. Re-planning
+    // after every miss would cost a model call per miss to ask a question the
+    // model could already have listed.
+    const queries = await this.planQueries(context);
+    for (const query of queries.slice(0, MAX_TOOL_ROUNDS)) {
       const result = await this.tools.execute(
         'search_company_docs',
         { query, limit: 4 },
@@ -82,16 +88,30 @@ export default class WriterAgent {
   }
 
   /**
-   * Successive, different questions - never the same query twice, which is what
-   * get_run_history exists to prevent at the graph level too.
+   * Asks the model what it needs to look up. The queries are the agent's own
+   * words - that is the point: a template built from the section title always
+   * asks the same thing, so it can only ever find the same thing, and "je ne
+   * sais pas encore X" is never expressed.
+   *
+   * Degrades to the section title rather than throwing: a planning call that
+   * fails must cost one weak search, not the whole section.
+   *
    * @param {object} context
-   * @param {number} round
-   * @returns {string|null}
+   * @returns {Promise<string[]>}
    */
-  planQuery(context, round) {
-    const texts = context.requirements.map((r) => r.text);
-    if (round === 1) return context.title + ' ' + (texts[0] ?? '');
-    if (round === 2) return texts.slice(1, 3).join(' ') || null;
-    return context.title;
+  async planQueries(context) {
+    try {
+      const plan = await this.llm.complete({
+        name: 'writer:plan',
+        tier: TIERS.VOLUME,
+        system: WRITER_PLAN_SYSTEM,
+        user: renderPlanTask(context),
+        schema: searchPlanSchema,
+        stub: SEARCH_PLAN_STUB,
+      });
+      return [...new Set(plan.queries)];
+    } catch {
+      return [context.title];
+    }
   }
 }
