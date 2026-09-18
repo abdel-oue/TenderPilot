@@ -1,5 +1,13 @@
-# Acceptance test for this file: `docker compose up` on a clean clone starts
-# everything and runs migrations + seed. Five services, one command.
+# Acceptance test for this file: `npm run up` on a clean clone starts everything
+# and runs migrations + seed. Five services, one command.
+#
+# Every path below is relative to THIS directory, because that is what Compose
+# resolves against - so the build context is `..`, the repo root, which is what
+# both images need (web and api both import packages/shared).
+#
+# `.env` lives at the repo root, not here, so it is passed explicitly:
+#   docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+# `npm run up` is that line. From inside docker/, use `--env-file ../.env`.
 
 name: tenderpilot
 
@@ -13,7 +21,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs once, on an empty volume. Drop the volume to re-run it.
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -33,7 +41,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: api
     environment: &api_env
@@ -63,7 +71,7 @@ services:
       STUB_LLM: ${STUB_LLM}
     volumes: &api_volumes
       # The corpus is gitignored and .dockerignore'd: mounted, never baked in.
-      - ./apps/api/src/db/seed/data:/app/apps/api/src/db/seed/data:ro
+      - ../apps/api/src/db/seed/data:/app/apps/api/src/db/seed/data:ro
       # Uploads are user data. On a named volume, shared with the worker (which
       # OCRs them) and surviving `docker compose up --build`.
       - uploads:/app/uploads
@@ -88,7 +96,7 @@ services:
   worker:
     # The api IMAGE with a different command. No build block: compose reuses it.
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: api
     environment: *api_env
@@ -103,7 +111,7 @@ services:
 
   web:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: web
       args:

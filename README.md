@@ -17,7 +17,7 @@ L'objectif n'est pas de remplacer le rédacteur, mais de lui livrer un dossier �
 ```bash
 cp .env.example .env     # remplir les clés modèle
 # déposer le corpus dans apps/api/src/db/seed/data/
-docker compose up
+npm run up
 ```
 
 → interface `http://localhost:3100` · api `http://localhost:3000`
@@ -48,7 +48,7 @@ eux, chaque section revient marquée `[A COMPLETER PAR L'HUMAIN]`.
 ## Déposer un dossier
 
 Les PDF déposés depuis l'interface sont écrits dans `uploads/<utilisateur>/`, sur
-un volume Docker nommé — ils survivent à un `docker compose up --build`. Le nom du
+un volume Docker nommé — ils survivent à un `npm run up`. Le nom du
 fichier stocké est l'empreinte de son contenu, ce qui fait que redéposer le même
 PDF ne crée pas de doublon et réutilise le cache d'extraction.
 

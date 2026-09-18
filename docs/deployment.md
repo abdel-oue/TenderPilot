@@ -14,11 +14,23 @@ Node 22 n'est nécessaire que pour développer hors conteneur.
 git clone <repo> && cd tenderpilot
 cp .env.example .env          # puis remplir les clés (voir plus bas)
 cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
-docker compose up             # → web http://localhost:3100, api http://localhost:3000
+npm run up                    # → web http://localhost:3100, api http://localhost:3000
 ```
 
-`docker compose up` applique les migrations et lance le seed. C'est le test
+`npm run up` applique les migrations et lance le seed. C'est le test
 d'acceptation de ce fichier : si ça ne suffit pas, c'est un bug.
+
+Tout le Docker vit dans `docker/` : `Dockerfile`, `init.sql`,
+`docker-compose.yml`, `docker-compose.dev.yml`. Seul `.dockerignore` reste à la
+racine, parce que Docker ne le lit qu'à la racine du contexte de build. Les
+chemins des fichiers compose sont relatifs à `docker/`, et `.env` reste à la
+racine : d'où les `-f docker/docker-compose.yml --env-file .env` que les scripts
+npm portent à votre place.
+
+```bash
+# l'équivalent explicite de npm run up
+docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+```
 
 ## Variables d'environnement
 
@@ -49,20 +61,22 @@ contient que des valeurs vides. Une clé en clair dans le dépôt est éliminato
 | `postgres` | 5432 | en local seulement |
 | `redis` | 6379 | non |
 
-`postgres` écrit sur un volume nommé : `docker compose down` ne détruit pas la
-base. Il faut `docker compose down -v` pour cela.
+`postgres` écrit sur un volume nommé : `npm run down` ne détruit pas la base.
+Il faut `docker compose -f docker/docker-compose.yml --env-file .env down -v`
+pour cela — volontairement long, ça n'est pas une commande qu'on tape distrait.
 
 ## Boucle de développement
 
 ```bash
 npm run up:dev     # monte les sources dans api + worker
-docker compose restart api worker   # après une modification
+npm run up:dev     # et de nouveau après une modification : les conteneurs
+                   # redémarrent sur les sources montées, sans rebuild
 npm run logs
 ```
 
-`docker-compose.dev.yml` n'est **pas** nommé `.override.yml` volontairement : il
-monte les sources en bind, et le `docker compose up` du jury doit utiliser les
-images autonomes, pas le disque du développeur.
+`docker/docker-compose.dev.yml` n'est **pas** nommé `.override.yml`
+volontairement : il monte les sources en bind, et le `npm run up` du jury doit
+utiliser les images autonomes, pas le disque du développeur.
 
 ## Base de données
 
@@ -94,7 +108,7 @@ unitaire, c'est une facture instable.
 |---|---|
 | l'api ne démarre pas, `Invalid environment` | une clé manque dans `.env` ; le message nomme laquelle |
 | `DOCUMENT_FILE_MISSING` | le corpus n'est pas dans `seed/data/` |
-| l'analyse reste en `queued` | le worker est arrêté : `docker compose ps` |
+| l'analyse reste en `queued` | le worker est arrêté : `npm run logs` |
 | `relation already exists` au démarrage | une migration appliquée a été éditée. Ne jamais faire ça |
 | l'OCR échoue | `pdftoppm` / `tesseract` absents — ils sont dans l'image api, pas sur l'hôte |
 | dimension d'embedding refusée | `EMBEDDING_DIMENSIONS` ≠ 512 |

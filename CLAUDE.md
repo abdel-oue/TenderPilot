@@ -20,11 +20,14 @@ response, seed input, env — is parsed, not assumed.
 
 ```
 tenderpilot/
-├── docker-compose.yml
 ├── .env.example
-├── .dockerignore                 # root context serves both images
-├── docker/
-│   └── Dockerfile                # targets: api (worker reuses it), web
+├── .dockerignore                 # root context serves both images — Docker only
+│                                 # reads it here, so it cannot move into docker/
+├── docker/                       # everything docker, nothing docker outside it
+│   ├── Dockerfile                # targets: api (worker reuses it), web
+│   ├── init.sql
+│   ├── docker-compose.yml        # paths relative to docker/, context is `..`
+│   └── docker-compose.dev.yml
 ├── apps/
 │   ├── web/                      # Next.js
 │   │   ├── app/                  # routes, page.tsx / layout.tsx
@@ -365,8 +368,11 @@ working tree. The human reads the diff and says what gets committed.
 - Compose services: `web`, `api`, `worker`, `postgres`, `redis`. Postgres and redis have
   healthchecks; api and worker use `depends_on: condition: service_healthy`.
 - Postgres data on a named volume. Deleting containers must not delete the database.
-- `docker compose up` on a clean clone starts everything and runs migrations + seed. That is
-  the acceptance test for the compose file.
+- `npm run up` on a clean clone starts everything and runs migrations + seed. That is the
+  acceptance test for the compose file. It wraps
+  `docker compose -f docker/docker-compose.yml --env-file .env up -d --build`: the compose
+  files live in `docker/` and `.env` does not, so both flags are always needed and the npm
+  script is the one place that knows them.
 - Layer order: copy manifests, install, then copy source. Don't invalidate the install layer
   on every code change.
 
