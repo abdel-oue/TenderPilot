@@ -48,3 +48,4 @@ next-env.d.ts
 
 # User uploads (EX-01). Runtime data, never committed.
 /uploads/
+*.docx
