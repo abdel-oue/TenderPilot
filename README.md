@@ -55,6 +55,12 @@ PDF ne crée pas de doublon et réutilise le cache d'extraction.
 Le fichier est validé sur ses octets (`%PDF`), pas sur l'en-tête annoncé par le
 navigateur, et plafonné à `MAX_UPLOAD_MB` (25 Mo par défaut).
 
+On ne sait jamais à l'avance si un PDF déposé est un scan. Chaque page est donc
+d'abord lue sans OCR, et **seules celles dont le texte n'est pas exploitable** sont
+rastérisées et passées à l'OCR — un dossier de 60 pages avec cinq annexes scannées
+coûte cinq pages d'OCR, pas soixante, et ces cinq pages cessent d'être invisibles.
+Détail : [docs/pipeline.md](docs/pipeline.md#3-extraction--chaque-page-couche-texte-ou-ocr).
+
 ## Ce que ça fait, concrètement
 
 Sur `AO-2026-004`, qui est un **scan intégral sans couche texte** :
@@ -84,8 +90,11 @@ Chaque exigence affichée cite sa page ; un clic ouvre le PDF à cette page.
 |---|---|
 | **[docs/agents.md](docs/agents.md)** | **Comment l'agent fonctionne** — le graphe, les outils, les boucles, ce qu'il refuse de faire. Commencez ici |
 | [docs/architecture.md](docs/architecture.md) | Les cinq services, les couches, le modèle de données |
+| [docs/pipeline.md](docs/pipeline.md) | Le chemin des données : upload, cache, OCR, chunks, embeddings, graphe, export |
+| [docs/frontend.md](docs/frontend.md) | Le web : routes, session, TanStack Query, thème |
 | [docs/api.md](docs/api.md) | Tous les endpoints, avec exemples de réponses |
-| [docs/deployment.md](docs/deployment.md) | Exécution, variables, tests, diagnostic |
+| [docs/testing.md](docs/testing.md) | Installation, boucle de développement, lancer et écrire les tests |
+| [docs/deployment.md](docs/deployment.md) | Exécution, variables, diagnostic |
 | [CLAUDE.md](CLAUDE.md) | Règles de code du dépôt |
 
 ## Le graphe, en une image
@@ -140,3 +149,10 @@ npm test          # sans réseau ni base de données
 ```
 
 Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.
+
+**Dernier passage global documenté au 18/09/2026 : 162 tests passent, 15 échouent** — trois fichiers dont les
+doubles de dépôts datent d'avant le cloisonnement par compte (migration
+`0004_owner_scoping`), inchangés par le routage par page. Ce résultat global est
+distinct des vérifications frontend ci-dessus. `npm run test:e2e` lance désormais
+la vitrine et l’espace de travail avec API simulée. Détail et correctif des tests
+backend dans [docs/testing.md](docs/testing.md).

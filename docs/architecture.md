@@ -1,7 +1,10 @@
 # Architecture
 
-Voir [agents.md](agents.md) pour le comportement de l'agent, [api.md](api.md) pour
-les endpoints, [deployment.md](deployment.md) pour l'exécution.
+Voir [agents.md](agents.md) pour le comportement de l'agent,
+[pipeline.md](pipeline.md) pour le chemin des données du PDF au DOCX,
+[frontend.md](frontend.md) pour le web, [api.md](api.md) pour les endpoints,
+[testing.md](testing.md) pour installer et tester, [deployment.md](deployment.md)
+pour l'exécution.
 
 ## Les cinq services
 
