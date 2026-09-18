@@ -20,7 +20,7 @@ cp .env.example .env     # remplir les clés modèle
 npm run up
 ```
 
-→ interface `http://localhost:3100` · api `http://localhost:3000`
+→ interface `http://localhost:4100` · api `http://localhost:4000`
 → compte de démonstration `demo@tenderpilot.local` / `demo1234`
 
 Le worker indexe le corpus de l'entreprise à son démarrage. Pour le relancer à la
@@ -31,7 +31,28 @@ npm run db:index                       # le compte de démonstration
 npm run db:index -- vous@exemple.com   # un autre compte
 ```
 
-Détails, variables et diagnostic : **[docs/deployment.md](docs/deployment.md)**.
+Les ports hôte publiés sont des variables (`API_HOST_PORT` 4000, `WEB_HOST_PORT`
+4100, `POSTGRES_HOST_PORT` 5433) et ne sont ouverts que sur `127.0.0.1` : le port
+conteneur, lui, ne bouge pas (api 3000, web 3100). Sur une machine qui fait déjà
+tourner autre chose, changer la variable suffit.
+
+En production les deux moitiés sont séparées : le web est construit et servi par
+**Vercel** sur `tenderpilot.ouedghiri.dev`, et le VPS ne fait tourner que
+l'api, le worker, postgres et redis derrière nginx sur
+`api.tenderpilot.ouedghiri.dev` — vhost versionné dans
+[docs/nginx/](docs/nginx/).
+
+```bash
+npm run up:vps     # api + worker + postgres + redis, sans le conteneur web
+npm run logs:vps
+```
+
+Les deux hôtes partagent le domaine `ouedghiri.dev`, donc le cookie de session
+reste `SameSite=Lax` : les appels du front vers l'api sont *same-site*. Un front
+sur une URL `*.vercel.app` casserait ça.
+
+Détails, variables, mise en production et diagnostic :
+**[docs/deployment.md](docs/deployment.md)**.
 
 ## Espace de travail web
 
@@ -63,7 +84,8 @@ npm run test:e2e:smoke -w @tenderpilot/web   # stack réelle et vrai modèle, ho
 ```
 
 Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour ne
-pas tester accidentellement une ancienne image Docker sur `:3100`.
+pas tester accidentellement le serveur de développement sur `:3100` ni la pile
+Docker sur `:4100`.
 
 Vérification frontend au 18/09/2026 : **13 tests unitaires passent ; 47 tests
 navigateur passent, 1 test réservé au mobile est ignoré sur desktop**. Le lint et le
@@ -138,7 +160,8 @@ Chaque exigence affichée cite sa page ; un clic ouvre le PDF à cette page.
 | [docs/frontend.md](docs/frontend.md) | Le web : routes, session, TanStack Query, thème |
 | [docs/api.md](docs/api.md) | Tous les endpoints, avec exemples de réponses |
 | [docs/testing.md](docs/testing.md) | Installation, boucle de développement, lancer et écrire les tests |
-| [docs/deployment.md](docs/deployment.md) | Exécution, variables, diagnostic |
+| [docs/deployment.md](docs/deployment.md) | Exécution, variables, ports, mise en production derrière nginx, diagnostic |
+| [docs/nginx/](docs/nginx/) | Le vhost nginx de l'api, à copier dans `sites-available`, en HTTP simple (certbot ajoute le TLS) |
 | [docs/diagrams.md](docs/diagrams.md) | Tous les diagrammes Mermaid : cas d'usage, services, couches, graphe, séquence, extraction, modèle de données |
 | [CLAUDE.md](CLAUDE.md) | Règles de code du dépôt |
 

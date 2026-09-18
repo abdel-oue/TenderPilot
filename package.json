@@ -26,7 +26,10 @@
     "up": "docker compose -f docker/docker-compose.yml --env-file .env up -d --build",
     "up:dev": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml --env-file .env up -d",
     "down": "docker compose -f docker/docker-compose.yml --env-file .env down",
-    "logs": "docker compose -f docker/docker-compose.yml --env-file .env logs -f api worker"
+    "logs": "docker compose -f docker/docker-compose.yml --env-file .env logs -f api worker",
+    "up:vps": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.vps.yml --env-file .env up -d --build",
+    "down:vps": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.vps.yml --env-file .env down",
+    "logs:vps": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.vps.yml --env-file .env logs -f api worker"
   },
   "devDependencies": {
     "vitest": "^5.0.1"

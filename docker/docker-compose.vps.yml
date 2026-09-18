@@ -1,0 +1,15 @@
+# Production topology: the api half only.
+#
+#   npm run up:vps
+#
+# The web is built and served by Vercel (tenderpilot.ouedghiri.dev), so this
+# machine runs api + worker + postgres + redis and nothing else. Building a
+# Next.js image here would burn CPU on a bundle nobody would ever request.
+#
+# `web` is not deleted - compose cannot remove a service from an override - it
+# is parked behind a profile that is never activated. `docker-compose.yml` on
+# its own still starts all five services, which is what `npm run up` and the
+# repo's acceptance test rely on.
+services:
+  web:
+    profiles: ["never"]

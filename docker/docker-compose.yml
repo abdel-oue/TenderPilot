@@ -27,9 +27,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    # Published for local psql/drizzle-kit only. Drop this line on a VPS.
+    # Published for local psql/drizzle-kit only, and bound to loopback so it is
+    # never reachable from outside the host. The host port is a variable because
+    # a VPS usually already has a postgres sitting on 5432.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
 
   redis:
     image: redis:7-alpine
@@ -79,8 +81,11 @@ services:
     # on every restart.
     command: >
       sh -c "node src/db/migrate.js && node src/db/seed/index.js && node src/server.js"
+    # Container-side stays 3000 (see PORT above); only the host side moves, so
+    # it can sit beside whatever else the machine already runs. Loopback-only:
+    # nginx is the single public entrypoint.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${API_HOST_PORT:-4000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,8 +124,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3100
+    # Container-side stays 3100; host side configurable, loopback-only.
     ports:
-      - "3100:3100"
+      - "127.0.0.1:${WEB_HOST_PORT:-4100}:3100"
     depends_on:
       api:
         condition: service_healthy
