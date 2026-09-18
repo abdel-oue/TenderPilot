@@ -18,11 +18,16 @@ export function hashFile(buffer) {
 
 /**
  * Previously extracted pages for these exact bytes, or null on a miss.
+ *
+ * Each page carries its chunk `id` so a caller repairing an unread page can update
+ * that one row instead of rebuilding the document - and `extractionPath` so it can
+ * tell a document that was never OCR'd from one where OCR already came up empty.
+ *
  * @param {string} hash
  * @param {string} ownerId the cache is per owner: identical bytes uploaded by two
  *   users are two documents, and returning the other one's id would leak it
  * @param {DocumentRepository} [documents] injectable for tests
- * @returns {Promise<{ documentId: string, pages: object[] }|null>}
+ * @returns {Promise<{ documentId: string, extractionPath: string, pages: object[] }|null>}
  */
 export async function getCachedPages(hash, ownerId, documents = new DocumentRepository()) {
   const document = await documents.findByContentHash(hash, ownerId);
@@ -33,6 +38,12 @@ export async function getCachedPages(hash, ownerId, documents = new DocumentRepo
 
   return {
     documentId: document.id,
-    pages: chunks.map((c) => ({ page: c.page, text: c.content, extraction: c.extraction })),
+    extractionPath: document.extractionPath,
+    pages: chunks.map((c) => ({
+      id: c.id,
+      page: c.page,
+      text: c.content,
+      extraction: c.extraction,
+    })),
   };
 }
