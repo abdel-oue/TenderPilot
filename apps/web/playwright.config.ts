@@ -1,6 +1,8 @@
-// Playwright config. Specs live in e2e/, never colocated with the source.
-//
-// TODO: testDir './e2e', baseURL http://localhost:3100
-// TODO: default run EXCLUDES the @smoke spec (it hits the real model)
-// TODO: no waitForTimeout anywhere; rely on web-first assertions
-// TODO: runs against the docker-compose stack with the seed applied and STUB_LLM=1
+import { defineConfig } from "@playwright/test";
+import workspaceConfig from "./playwright.workspace.config";
+// Frontend journeys use intercepted APIs; no database or model is contacted.
+export default defineConfig({
+  ...workspaceConfig,
+  testMatch: ["workspace.spec.ts", "landing.spec.ts"],
+  outputDir: "../../test-results/frontend",
+});
