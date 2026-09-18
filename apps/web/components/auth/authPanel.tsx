@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils/classNameUtils";
+import Link from "next/link";
 
 type Mode = "login" | "signup";
 
@@ -70,6 +71,9 @@ export function AuthPanel() {
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-background p-8" data-testid="auth-signed-in">
         <p className="font-heading text-2xl">Bonjour {me.data.name}.</p>
         <p className="text-sm text-muted">Vous êtes connecté avec {me.data.email}.</p>
+        <Link className={SUBMIT} href="/tenders" data-testid="auth-open-app">
+          Ouvrir mes dossiers
+        </Link>
         <button className={SUBMIT} onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending} data-testid="auth-logout">
           {logoutMutation.isPending && <Loader2 size={16} className="animate-spin" />}
           Se déconnecter

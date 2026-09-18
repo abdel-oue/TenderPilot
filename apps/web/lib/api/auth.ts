@@ -1,51 +1,25 @@
 import { loginSchema, signupSchema, userSchema } from "@tenderpilot/shared";
 import type { z } from "zod";
+import { ApiError, request } from "./client";
 
 export type User = z.infer<typeof userSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-export class ApiError extends Error {
-  code: string;
-  constructor(message: string, code: string) {
-    super(message);
-    this.name = "ApiError";
-    this.code = code;
-  }
-}
-
-async function request(path: string, body?: unknown): Promise<unknown> {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    credentials: "include",
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (response.status === 204) return null;
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const shape = payload as { error?: string; code?: string } | null;
-    throw new ApiError(shape?.error ?? "Le service est indisponible.", shape?.code ?? "NETWORK_ERROR");
-  }
-  return payload;
-}
 
 function parseUser(payload: unknown): User {
   return userSchema.parse((payload as { user: unknown }).user);
 }
 
 export async function signup(input: SignupInput): Promise<User> {
-  return parseUser(await request("/auth/signup", input));
+  return parseUser(await request("/auth/signup", { body: input }));
 }
 
 export async function login(input: LoginInput): Promise<User> {
-  return parseUser(await request("/auth/login", input));
+  return parseUser(await request("/auth/login", { body: input }));
 }
 
 export async function logout(): Promise<void> {
-  await request("/auth/logout", {});
+  await request("/auth/logout", { method: "POST" });
 }
 
 /** Returns null when there is no session, so the query itself is not an error state. */
@@ -57,3 +31,6 @@ export async function fetchMe(): Promise<User | null> {
     throw error;
   }
 }
+
+// Re-exported so callers that already import from here keep working.
+export { ApiError };
