@@ -32,6 +32,7 @@ export default function VerdictHeader({ tenderId, reference, analysis }: Verdict
           <Button
             data-testid="analyze-button"
             variant="primary"
+            disabled={running || start.isPending}
             onClick={() => start.mutate()}
           >
             {running ? "Analyse en cours…" : start.isPending ? "Lancement…" : "Analyser"}

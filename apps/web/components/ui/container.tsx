@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils/classNameUtils";
 
 interface ContainerProps {
   children: React.ReactNode;
-  as?: "div" | "nav";
+  as?: "div" | "nav" | "section";
   className?: string;
   "aria-label"?: string;
   "data-testid"?: string;

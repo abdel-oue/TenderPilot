@@ -1,133 +1,60 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
-import { cn } from "@/lib/utils/classNameUtils";
 import Link from "next/link";
-
-type Mode = "login" | "signup";
-
-const TAB = "flex-1 cursor-pointer rounded-md px-4 py-2.5 text-tiny font-semibold text-muted transition duration-200 hover:text-foreground";
-const TAB_ACTIVE = "bg-surface text-foreground";
-const INPUT = "w-full rounded-md border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition duration-200 focus:border-accent";
-const SUBMIT = "mt-2 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-foreground bg-foreground px-6 py-3 text-sm font-semibold text-background transition duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
-const ALERT = "rounded-md border border-border bg-warning-soft px-4 py-3 text-tiny text-warning";
-
-interface FieldProps {
-  label: string;
-  type: string;
-  value: string;
-  autoComplete: string;
-  testid: string;
-  onChange: (value: string) => void;
-}
-
-function Field({ label, type, value, autoComplete, testid, onChange }: FieldProps) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-mini font-semibold tracking-wide text-muted uppercase">{label}</span>
-      <input
-        className={INPUT}
-        type={type}
-        value={value}
-        autoComplete={autoComplete}
-        data-testid={testid}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
-export function AuthPanel() {
-  const [mode, setMode] = useState<Mode>("login");
+import { ArrowRight, Loader2, LockKeyhole } from "lucide-react";
+import { useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
+import { AuthField } from "./authField";
+import { Reveal } from "@/components/ui/reveal";
+import { PRIMARY, SECONDARY } from "@/lib/utils/workspaceStyleUtils";
+import { validateAuth, type AuthMode, type AuthErrors } from "@/lib/utils/authUtils";
+interface AuthPanelProps { mode?: AuthMode }
+export function AuthPanel({ mode = "login" }: AuthPanelProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [errors, setErrors] = useState<AuthErrors>({});
   const router = useRouter();
   const me = useMe();
-  const loginMutation = useLogin();
-  const signupMutation = useSignup();
-  const logoutMutation = useLogout();
-  const mutation = mode === "login" ? loginMutation : signupMutation;
-
-  // Signing in lands on the dashboard, signing up lands on the company page:
-  // a brand new account has no profile and no corpus yet, and a dossier cannot
-  // be matched against an empty company. Sending it to /tenders would show an
-  // empty list and no way to guess what is missing.
+  const login = useLogin();
+  const signup = useSignup();
+  const logout = useLogout();
+  const mutation = mode === "login" ? login : signup;
+  const isSignup = mode === "signup";
   function submit() {
-    if (mode === "login") {
-      loginMutation.mutate({ email, password }, { onSuccess: () => router.push("/tenders") });
-    } else {
-      signupMutation.mutate({ name, email, password }, { onSuccess: () => router.push("/company") });
-    }
+    if (mutation.isPending) return;
+    const input = { name: name.trim(), email: email.trim(), password };
+    const nextErrors = validateAuth(mode, input);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    if (isSignup) signup.mutate(input, { onSuccess: () => router.replace("/company") });
+    else login.mutate(input, { onSuccess: () => router.replace("/dashboard") });
   }
-
-  function switchTo(next: Mode) {
-    setMode(next);
-    loginMutation.reset();
-    signupMutation.reset();
-  }
-
-  if (me.isLoading) {
-    return <div className="h-80 w-full animate-pulse rounded-lg bg-soft" data-testid="auth-loading" />;
-  }
-
-  if (me.data) {
-    return (
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-background p-8" data-testid="auth-signed-in">
-        <p className="font-heading text-2xl">Bonjour {me.data.name}.</p>
-        <p className="text-sm text-muted">Vous êtes connecté avec {me.data.email}.</p>
-        <Link className={SUBMIT} href="/tenders" data-testid="auth-open-app">
-          Ouvrir mes dossiers
-        </Link>
-        <button className={SUBMIT} onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending} data-testid="auth-logout">
-          {logoutMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-          Se déconnecter
-        </button>
-      </div>
-    );
-  }
-
+  if (me.isPending) return <div className="h-96 animate-pulse rounded-2xl bg-soft" data-testid="auth-loading" aria-label="Chargement de la session" />;
+  if (me.data) return (
+    <Reveal className="space-y-5">
+      <div data-testid="auth-signed-in"><h1 className="font-heading text-4xl">Heureux de vous retrouver.</h1><p className="mt-4 text-sm text-muted">Vous êtes connecté avec {me.data.email}.</p></div>
+      <Link href="/dashboard" className={PRIMARY} data-testid="auth-open-app">Ouvrir mon tableau de bord <ArrowRight size={17} /></Link>
+      <button className={SECONDARY} disabled={logout.isPending} onClick={() => logout.mutate()} data-testid="auth-logout">{logout.isPending ? "Déconnexion…" : "Changer de compte"}</button>
+      {logout.isError && <p role="alert" className="text-sm text-warning">{logout.error.message}</p>}
+    </Reveal>
+  );
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-border bg-background p-8" data-testid="auth-panel">
-      <div className="flex gap-1 rounded-lg bg-soft p-1">
-        <button className={cn(TAB, mode === "login" && TAB_ACTIVE)} onClick={() => switchTo("login")} data-testid="auth-tab-login">
-          Se connecter
-        </button>
-        <button className={cn(TAB, mode === "signup" && TAB_ACTIVE)} onClick={() => switchTo("signup")} data-testid="auth-tab-signup">
-          Créer un compte
-        </button>
+    <Reveal>
+      <div data-testid="auth-panel" className="space-y-7">
+        <div><p className="mb-3 text-xs font-semibold tracking-label text-accent uppercase">Votre prochain marché commence ici</p><h1 className="font-heading text-4xl tracking-tight md:text-5xl">{isSignup ? "Faisons connaissance." : "Content de vous revoir."}</h1><p className="mt-4 text-sm leading-6 text-muted">{isSignup ? "Créez votre espace et donnez une longueur d’avance à votre entreprise." : "Retrouvez vos dossiers, vos analyses et vos prochaines opportunités."}</p></div>
+        <div className="space-y-5" role="group" aria-label={isSignup ? "Inscription" : "Connexion"} onKeyDown={(event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); submit(); } }}>
+          {isSignup && <AuthField label="Nom complet" type="text" value={name} onChange={setName} autoComplete="name" testid="auth-name" placeholder="Votre nom et prénom" error={errors.name} disabled={mutation.isPending} />}
+          <AuthField label="Adresse e-mail" type="email" value={email} onChange={setEmail} autoComplete="email" testid="auth-email" placeholder="vous@entreprise.ma" error={errors.email} disabled={mutation.isPending} />
+          <AuthField label="Mot de passe" type="password" value={password} onChange={setPassword} autoComplete={isSignup ? "new-password" : "current-password"} testid="auth-password" placeholder={isSignup ? "8 caractères minimum" : "Votre mot de passe"} error={errors.password} disabled={mutation.isPending} />
+          {isSignup && <p className="text-xs leading-5 text-muted">Un compte, un espace dédié à votre entreprise. Vous pourrez compléter votre profil après l’inscription.</p>}
+          {mutation.isError && <p className="rounded-xl bg-warning-soft p-3 text-sm text-warning" data-testid="auth-error" role="alert">{mutation.error.message}</p>}
+          {me.isError && <div className="rounded-xl bg-warning-soft p-3 text-sm text-warning" role="alert" data-testid="auth-session-error">Connexion au service indisponible. <button className="cursor-pointer underline" onClick={() => void me.refetch()}>Réessayer</button></div>}
+          <button className={`${PRIMARY} w-full`} onClick={submit} disabled={mutation.isPending} data-testid="auth-submit">{mutation.isPending && <Loader2 className="animate-spin" size={18} />}{mutation.isPending ? "Un instant…" : isSignup ? "Créer mon compte" : "Se connecter"}{!mutation.isPending && <ArrowRight size={18} />}</button>
+        </div>
+        <p className="text-center text-sm text-muted">{isSignup ? "Déjà un compte ? " : "Vous découvrez TenderPilot ? "}<Link className="font-semibold text-accent underline-offset-4 hover:underline" href={isSignup ? "/login" : "/signup"} data-testid={isSignup ? "auth-tab-login" : "auth-tab-signup"}>{isSignup ? "Se connecter" : "Créer un compte"}</Link></p>
+        <p className="flex items-center justify-center gap-2 border-t border-border pt-6 text-xs text-muted"><LockKeyhole size={14} /> Un espace privé pour vos appels d’offres.</p>
       </div>
-
-      <div className="flex flex-col gap-4">
-        {mode === "signup" && (
-          <Field label="Nom" type="text" value={name} autoComplete="name" testid="auth-name" onChange={setName} />
-        )}
-        <Field label="E-mail" type="email" value={email} autoComplete="email" testid="auth-email" onChange={setEmail} />
-        <Field
-          label="Mot de passe"
-          type="password"
-          value={password}
-          autoComplete={mode === "login" ? "current-password" : "new-password"}
-          testid="auth-password"
-          onChange={setPassword}
-        />
-
-        {mutation.isError && (
-          <p className={ALERT} data-testid="auth-error" role="alert">{mutation.error.message}</p>
-        )}
-        {me.isError && !mutation.isError && (
-          <p className={ALERT} data-testid="auth-session-error" role="alert">Session indisponible. Réessayez dans un instant.</p>
-        )}
-
-        <button className={SUBMIT} onClick={submit} disabled={mutation.isPending} data-testid="auth-submit">
-          {mutation.isPending && <Loader2 size={16} className="animate-spin" />}
-          {mode === "login" ? "Se connecter" : "Créer mon compte"}
-        </button>
-      </div>
-    </div>
+    </Reveal>
   );
 }

@@ -33,6 +33,37 @@ npm run db:index -- vous@exemple.com   # un autre compte
 
 Détails, variables et diagnostic : **[docs/deployment.md](docs/deployment.md)**.
 
+## Espace de travail web
+
+- `/login` (ou `/auth`) : connexion ; `/signup` : création de compte et accueil
+  dans le profil entreprise.
+- `/dashboard` : compteurs réels, décisions go / no-go, dossiers récents,
+  échéances à venir et progression des analyses.
+- `/tenders` : recherche et filtres ; `/tenders/new` : dépôt PDF avec reprise
+  après une erreur d’envoi, sans recréer le dossier dans la même session.
+- Sidebar responsive, menu mobile au clavier, transitions avec mouvement réduit,
+  thème clair / sombre, guide et paramètres du compte.
+- `/company` : import du profil depuis un fichier JSON et documents de référence.
+
+Ces écrans utilisent les endpoints existants, sans changement backend. Les tests
+navigateur interceptent les appels API : ils vérifient les interactions frontend,
+sans créer de comptes ni envoyer de documents au service réel.
+
+```bash
+npm run dev:web                     # interface locale :3100
+npx vitest run --project web        # tests unitaires frontend
+npm run test:e2e                    # vitrine + espace de travail, desktop/mobile
+npm run test:e2e:workspace -w @tenderpilot/web
+```
+
+Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour ne
+pas tester accidentellement une ancienne image Docker sur `:3100`.
+
+Vérification frontend : **13 tests unitaires passent ; 31 tests navigateur passent,
+1 test réservé au mobile est ignoré sur desktop**. Le lint et le build de production
+font partie des vérifications de cette interface. Les tests navigateur utilisent
+une API simulée et ne constituent pas un test d’intégration du backend réel.
+
 ## Une entreprise par compte
 
 Un compte = une entreprise. Créez un second utilisateur et vous obtenez une

@@ -1,108 +1,33 @@
 "use client";
-// "L'entreprise renseigne son profil une seule fois." One company per user, so
-// there is no company picker here — the session already says whose it is.
 import { useState } from "react";
-import { COMPANY_DOCUMENT_KINDS } from "@tenderpilot/shared";
-import UploadPanel from "@/components/tenders/uploadPanel";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  useCompany,
-  useCompanyDocuments,
-  useImportCompanyProfile,
-  useUploadCompanyDocument,
-} from "@/hooks/useCompany";
-
+import { Building2, CheckCircle2, Upload } from "lucide-react";
+import { useCompany, useImportCompanyProfile } from "@/hooks/useCompany";
+import { CompanyDocuments } from "./companyDocuments";
+import { PRIMARY, SECONDARY } from "@/lib/utils/workspaceStyleUtils";
 export default function CompanyPanel() {
   const company = useCompany();
-  const documents = useCompanyDocuments();
   const importProfile = useImportCompanyProfile();
-  const upload = useUploadCompanyDocument();
-  const [json, setJson] = useState("");
-
-  if (company.isPending) return <Skeleton className="h-64 w-full" />;
-  if (company.isError) {
-    return <p className="text-sm text-no-go">{(company.error as Error).message}</p>;
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [validation, setValidation] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  async function submit() {
+    if (!profileFile || reading || importProfile.isPending) return;
+    setValidation(null);
+    setReading(true);
+    try {
+      const profile: unknown = JSON.parse(await profileFile.text());
+      importProfile.mutate(profile);
+    } catch { setValidation("Ce fichier ne contient pas un profil JSON valide. Vérifiez son contenu puis réessayez."); }
+    finally { setReading(false); }
   }
-
+  if (company.isPending) return <div className="h-64 animate-pulse rounded-2xl bg-soft" />;
+  if (company.isError) return <div role="alert" className="space-y-3 rounded-2xl border border-border bg-surface p-6"><p className="text-sm text-warning">{company.error.message}</p><button className={SECONDARY} onClick={() => void company.refetch()}>Réessayer</button></div>;
   const { profile, references, team } = company.data;
-
-  return (
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">Profil</h2>
-        {profile ? (
-          <div data-testid="company-profile" className="rounded-md border border-border bg-surface p-4 text-sm">
-            <p className="font-semibold">{profile.raisonSociale}</p>
-            <p className="text-muted">
-              ICE {profile.ice} · {profile.siege} · {profile.effectif} personnes
-            </p>
-            <p className="mt-2 text-mini text-muted">
-              {references.length} référence(s) · {team.length} CV ·{" "}
-              {profile.certifications.join(", ") || "aucune certification"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted">
-              Aucun profil. Collez votre <code>profil-entreprise.json</code> pour commencer —
-              sans lui, aucune exigence ne peut être confrontée à vos capacités.
-            </p>
-            <textarea
-              data-testid="company-json"
-              className="min-h-48 w-full rounded-md border border-border bg-background p-3 font-mono text-tiny"
-              placeholder='{ "raison_sociale": "…", "ice": "…", "references": [...], "equipe": [...] }'
-              value={json}
-              onChange={(event) => setJson(event.target.value)}
-            />
-            <Button
-              data-testid="company-import"
-              variant="primary"
-              onClick={() => {
-                // Parsed here only to catch a typo before the round trip. The api
-                // validates it properly, against the shared zod schema.
-                try {
-                  importProfile.mutate(JSON.parse(json));
-                } catch {
-                  /* invalid JSON: the error below covers it */
-                }
-              }}
-            >
-              {importProfile.isPending ? "Import…" : "Importer le profil"}
-            </Button>
-            {importProfile.isError ? (
-              <p className="text-sm text-no-go">{(importProfile.error as Error).message}</p>
-            ) : null}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">
-          Documents de l&apos;entreprise
-        </h2>
-        <p className="text-sm text-muted">
-          Attestations, mémoires déjà rendus, profil. Ce sont eux que le rédacteur fouille
-          pour citer une référence réelle plutôt que d&apos;en inventer une.
-        </p>
-        <ul data-testid="company-documents" className="space-y-1 text-sm text-muted">
-          {(documents.data ?? []).map((document) => (
-            <li key={document.id}>
-              {document.kind} · {document.originalName} ·{" "}
-              {document.extractionPath === "pending"
-                ? "indexation en attente"
-                : `${document.pageCount} page(s) indexée(s)`}
-            </li>
-          ))}
-        </ul>
-        <UploadPanel
-          kinds={COMPANY_DOCUMENT_KINDS}
-          busy={upload.isPending}
-          error={upload.isError ? (upload.error as Error).message : null}
-          submitLabel="Ajouter un document"
-          onSubmit={(files, kind) => upload.mutate({ file: files[0], kind })}
-        />
-      </section>
-    </div>
-  );
+  return <div className="space-y-9">
+    <section className="rounded-2xl border border-border bg-surface p-6 md:p-7">
+      <div className="mb-5 flex items-center gap-3"><span className="rounded-xl bg-accent-soft p-3 text-accent"><Building2 size={22} /></span><div><h2 className="font-semibold">Profil de l’entreprise</h2><p className="mt-1 text-xs text-muted">La base d’une analyse adaptée à vos capacités.</p></div></div>
+      {profile ? <div data-testid="company-profile"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-heading text-2xl">{profile.raisonSociale}</h3><span className="flex items-center gap-1.5 text-xs text-positive"><CheckCircle2 size={15} /> Profil renseigné</span></div><p className="mt-3 text-sm text-muted">ICE {profile.ice} · {profile.siege}</p><div className="mt-6 grid grid-cols-3 gap-3 border-t border-border pt-6">{[{ value: profile.effectif, label: "Collaborateurs" }, { value: references.length, label: "Références" }, { value: team.length, label: "Profils équipe" }].map((item) => <div key={item.label}><p className="font-heading text-2xl">{item.value}</p><p className="mt-1 text-xs text-muted">{item.label}</p></div>)}</div><div className="mt-5 flex flex-wrap gap-2">{profile.certifications.map((certification) => <span key={certification} className="rounded-full bg-accent-soft px-3 py-1 text-xs text-accent">{certification}</span>)}</div></div> : <div className="space-y-5"><div className="rounded-xl bg-accent-soft p-4"><h3 className="text-sm font-medium">Bienvenue dans votre espace.</h3><p className="mt-2 text-sm leading-6 text-muted">Commencez par importer le fichier de profil de votre entreprise. Il rassemble vos informations, vos références et votre équipe.</p></div><label className="block space-y-2 text-sm font-medium">Fichier de profil (.json)<input type="file" accept=".json,application/json" data-testid="company-profile-file" disabled={reading || importProfile.isPending} className="block w-full cursor-pointer rounded-xl border border-border p-3 text-xs file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-soft file:px-3 file:py-2 file:text-foreground" onChange={(event) => { setProfileFile(event.target.files?.[0] ?? null); setValidation(null); }} /></label><button className={PRIMARY} data-testid="company-import" disabled={!profileFile || reading || importProfile.isPending} onClick={() => void submit()}><Upload size={16} />{reading || importProfile.isPending ? "Import en cours…" : "Importer mon profil"}</button>{(validation || importProfile.isError) && <p role="alert" data-testid="company-import-error" className="text-sm text-warning">{validation ?? importProfile.error?.message}</p>}</div>}
+    </section>
+    <CompanyDocuments />
+  </div>;
 }

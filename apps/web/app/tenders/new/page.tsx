@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { ArrowLeft, FileSearch, ShieldCheck } from "lucide-react";
+import NewDossierPanel from "@/components/tenders/newDossierPanel";
+export const metadata = { title: "Nouveau dossier — TenderPilot" };
+export default function Page() {
+  return <main className="mx-auto max-w-4xl space-y-7 px-5 py-10 md:px-9"><Link href="/tenders" className="flex items-center gap-2 text-xs text-muted hover:text-accent"><ArrowLeft size={15} /> Mes dossiers</Link><div><h1 className="font-heading text-4xl">Une nouvelle opportunité.</h1><p className="mt-3 text-sm leading-6 text-muted">Donnez une référence à votre dossier et ajoutez ses documents PDF.</p></div><NewDossierPanel /><div className="grid gap-5 md:grid-cols-2"><div className="rounded-2xl bg-accent-soft p-5"><FileSearch size={21} className="text-accent" /><h2 className="mt-3 text-sm font-medium">Commencez par les pièces essentielles</h2><p className="mt-2 text-xs leading-6 text-muted">Avis, CPS ou règlement de consultation. Vous pourrez ajouter d’autres pièces avant de lancer l’analyse.</p></div><div className="rounded-2xl border border-border p-5"><ShieldCheck size={21} className="text-accent" /><h2 className="mt-3 text-sm font-medium">Votre entreprise, comme point de départ</h2><p className="mt-2 text-xs leading-6 text-muted">Un profil à jour permet de vérifier votre éligibilité. <Link href="/company" className="text-accent underline">Vérifier mon profil</Link></p></div></div></main>;
+}

@@ -12,7 +12,12 @@ function useSessionMutation<TInput>(mutationFn: (input: TInput) => Promise<User 
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: authKeys.all }),
+    onSuccess: async (user) => {
+      await queryClient.cancelQueries();
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.all[0] });
+      queryClient.setQueryData(authKeys.me(), user ?? null);
+      await queryClient.invalidateQueries({ queryKey: authKeys.all });
+    },
   });
 }
 

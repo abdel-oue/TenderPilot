@@ -1,5 +1,5 @@
-import RequireSession from "@/components/auth/requireSession";
+import { WorkspaceShell } from "@/components/workspace/workspaceShell";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return <RequireSession>{children}</RequireSession>;
+  return <WorkspaceShell>{children}</WorkspaceShell>;
 }

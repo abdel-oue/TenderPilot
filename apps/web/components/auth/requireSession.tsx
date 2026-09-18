@@ -27,16 +27,17 @@ export default function RequireSession({ children }: RequireSessionProps) {
   }, [signedOut, router]);
 
   if (me.isLoading || signedOut) {
-    return <div className="mx-auto h-64 w-full max-w-5xl animate-pulse rounded-lg bg-soft m-8" data-testid="session-loading" />;
+    return <div className="m-5 h-64 max-w-5xl animate-pulse rounded-2xl bg-soft md:m-8" data-testid="session-loading" aria-label="Chargement de votre espace" />;
   }
 
   // A network failure is not a signed-out session: say so rather than bouncing
   // the user to a login form they do not need.
   if (me.isError) {
     return (
-      <p className="m-8 rounded-md border border-border bg-warning-soft px-4 py-3 text-tiny text-warning" role="alert" data-testid="session-error">
+      <div className="m-8 rounded-md border border-border bg-warning-soft px-4 py-3 text-sm text-warning" role="alert" data-testid="session-error">
         Session indisponible. Réessayez dans un instant.
-      </p>
+        <button className="ml-3 cursor-pointer underline underline-offset-4" onClick={() => void me.refetch()}>Réessayer</button>
+      </div>
     );
   }
 

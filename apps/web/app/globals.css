@@ -98,6 +98,10 @@
 }
 
 @layer base {
+  .auth-orbit {
+    background: repeating-radial-gradient(circle at 100% 0%, transparent 0, transparent 78px, var(--inverse-border) 79px, transparent 80px);
+    opacity: 0.25;
+  }
   /* Focus ring and reduced-motion are global guarantees, not per-element choices. */
   :focus-visible {
     outline: 2px solid var(--color-accent);
