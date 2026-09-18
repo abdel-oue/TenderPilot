@@ -9,46 +9,8 @@ endpoints, voir [api.md](api.md).
 Neuf nœuds, deux arêtes conditionnelles. Le graphe est un `StateGraph` LangGraph
 (`apps/api/src/graph/index.js`) avec un checkpointer Postgres.
 
-```mermaid
-flowchart TD
-    START([Dépôt du dossier]) --> ingest
-
-    subgraph EX["Extractor"]
-        ingest["ingest<br/><i>PDF → pages numérotées</i><br/>couche texte ou OCR"]
-        extract["extractRequirements<br/><i>pages → exigences</i><br/>1 passe / document"]
-        classify["classifyRequirements<br/><i>éliminatoire ?</i><br/>1 passe / exigence"]
-        rubric["parseRubric<br/><i>grille de notation<br/>de CE dossier</i>"]
-        ingest --> extract --> classify --> rubric
-    end
-
-    subgraph QU["Qualifier"]
-        match["matchProfile<br/><i>exigences × profil</i><br/>met/partial/unmet/unknown"]
-        score["computeScore<br/><i>couverture pondérée</i>"]
-        decide["decide<br/><i>go / no-go + blockers</i>"]
-        match --> score --> decide
-    end
-
-    rubric --> match
-
-    decide -->|no-go| STOP([FIN<br/>aucune rédaction])
-    decide -->|go| draft
-
-    subgraph WR["Writer + Compliance"]
-        draft["draft<br/><i>rédige chaque section</i><br/>appelle des outils"]
-        comp["compliance<br/><i>relit et REFUSE</i>"]
-        draft --> comp
-    end
-
-    comp -->|refus, max 2| draft
-    comp -->|validé| DONE([Dossier prêt])
-
-    style STOP fill:#fee,stroke:#c00
-    style DONE fill:#efe,stroke:#0a0
-    style decide fill:#ffd,stroke:#a80
-    style comp fill:#ffd,stroke:#a80
-```
-
-En texte, si le diagramme ne s'affiche pas :
+Le diagramme vit dans [diagrams.md](diagrams.md#4-le-graphe-de-lagent) — une seule
+copie, pour qu'un changement de nœud ne se répercute qu'à un endroit. En texte :
 
 ```
 ingest → extractRequirements → classifyRequirements → parseRubric

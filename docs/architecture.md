@@ -5,6 +5,8 @@ Voir [agents.md](agents.md) pour le comportement de l'agent,
 [frontend.md](frontend.md) pour le web, [api.md](api.md) pour les endpoints,
 [testing.md](testing.md) pour installer et tester, [deployment.md](deployment.md)
 pour l'exécution.
+Tous les schémas de ce document existent aussi en Mermaid, copiables, dans
+[diagrams.md](diagrams.md).
 
 ## Les cinq services
 

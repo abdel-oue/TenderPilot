@@ -139,16 +139,25 @@ Chaque exigence affichée cite sa page ; un clic ouvre le PDF à cette page.
 | [docs/api.md](docs/api.md) | Tous les endpoints, avec exemples de réponses |
 | [docs/testing.md](docs/testing.md) | Installation, boucle de développement, lancer et écrire les tests |
 | [docs/deployment.md](docs/deployment.md) | Exécution, variables, diagnostic |
+| [docs/diagrams.md](docs/diagrams.md) | Tous les diagrammes Mermaid : cas d'usage, services, couches, graphe, séquence, extraction, modèle de données |
 | [CLAUDE.md](CLAUDE.md) | Règles de code du dépôt |
 
 ## Le graphe, en une image
 
-```
-ingest → extractRequirements → classifyRequirements → parseRubric
-      → matchProfile → computeScore → decide ─[no-go]─→ FIN
-                                             └─[go]───→ draft → compliance
-                                                          ↑         │
-                                                          └──refus──┘  (max 2)
+```mermaid
+stateDiagram-v2
+  [*] --> ingest
+  ingest --> extractRequirements
+  extractRequirements --> classifyRequirements
+  classifyRequirements --> parseRubric
+  parseRubric --> matchProfile
+  matchProfile --> computeScore
+  computeScore --> decide
+  decide --> [*]: no-go, aucune rédaction
+  decide --> draft: go
+  draft --> compliance
+  compliance --> draft: section refusée (max 2)
+  compliance --> [*]: sections validées
 ```
 
 Deux arêtes conditionnelles, et c'est là qu'est l'agent :
@@ -161,7 +170,10 @@ Deux arêtes conditionnelles, et c'est là qu'est l'agent :
 Les deux bornes vivent dans la condition d'arête, jamais dans un prompt. On
 n'*demande* pas au modèle de s'arrêter, on l'en empêche.
 
-Diagramme complet et détaillé : [docs/agents.md](docs/agents.md).
+Les autres diagrammes — cas d'usage, services, couches, séquence d'une analyse,
+extraction page par page, modèle de données — sont dans
+**[docs/diagrams.md](docs/diagrams.md)**, en Mermaid et copiables tels quels.
+Comportement de l'agent : [docs/agents.md](docs/agents.md).
 
 ## Les garde-fous
 
