@@ -44,7 +44,7 @@ export function Navigation({ copy, locale }: NavigationProps) {
         <a href="/auth" className="hidden text-tiny whitespace-nowrap text-muted hover:text-foreground md:inline" data-testid="header-login">
           {locale === "fr" ? "Se connecter" : "Sign in"}
         </a>
-        <Button variant="primary" href="#demo" className="hidden min-h-10 px-4 py-2.5 text-tiny lg:inline-flex">
+        <Button variant="primary" href="/auth" data-testid="nav-start" className="hidden min-h-10 px-4 py-2.5 text-tiny lg:inline-flex">
           {copy.discover}
           <ArrowUpRight size={15} />
         </Button>
@@ -62,7 +62,7 @@ export function Navigation({ copy, locale }: NavigationProps) {
         <a href="/auth" onClick={() => setOpen(false)} className="py-2.5 text-base" data-testid="mobile-login">
           {locale === "fr" ? "Se connecter" : "Sign in"}
         </a>
-        <Button variant="primary" href="#demo" onClick={() => setOpen(false)}>
+        <Button variant="primary" href="/auth" data-testid="mobile-start" onClick={() => setOpen(false)}>
           {copy.discover}
           <ArrowUpRight size={16} />
         </Button>

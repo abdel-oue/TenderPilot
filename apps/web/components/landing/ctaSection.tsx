@@ -18,8 +18,8 @@ export function CtaSection({ copy }: CtaSectionProps) {
           <h2 className="font-heading text-panel font-normal tracking-display text-balance whitespace-pre-line">{copy.cta.title}</h2>
           <p className={cn(LEAD, "text-inverse-muted md:text-base")}>{copy.cta.description}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="primary" href="#demo" className="border-inverse bg-inverse text-inverse-surface hover:bg-inverse">
-              {copy.demo}
+            <Button variant="primary" href="/auth" data-testid="cta-start" className="border-inverse bg-inverse text-inverse-surface hover:bg-inverse">
+              {copy.discover}
               <ArrowUpRight size={17} />
             </Button>
             <Button href="#how-it-works" className="border-inverse-border text-inverse hover:bg-inverse-border">

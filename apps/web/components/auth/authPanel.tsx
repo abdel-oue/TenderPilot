@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils/classNameUtils";
@@ -45,15 +46,23 @@ export function AuthPanel() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const router = useRouter();
   const me = useMe();
   const loginMutation = useLogin();
   const signupMutation = useSignup();
   const logoutMutation = useLogout();
   const mutation = mode === "login" ? loginMutation : signupMutation;
 
+  // Signing in lands on the dashboard, signing up lands on the company page:
+  // a brand new account has no profile and no corpus yet, and a dossier cannot
+  // be matched against an empty company. Sending it to /tenders would show an
+  // empty list and no way to guess what is missing.
   function submit() {
-    if (mode === "login") loginMutation.mutate({ email, password });
-    else signupMutation.mutate({ name, email, password });
+    if (mode === "login") {
+      loginMutation.mutate({ email, password }, { onSuccess: () => router.push("/tenders") });
+    } else {
+      signupMutation.mutate({ name, email, password }, { onSuccess: () => router.push("/company") });
+    }
   }
 
   function switchTo(next: Mode) {
