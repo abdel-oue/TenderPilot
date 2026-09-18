@@ -335,6 +335,9 @@ working tree. The human reads the diff and says what gets committed.
 - Message format: `type(scope): imperative summary` — `feat(agents): extract eliminatory
   requirements`, `fix(seed): upsert references on REF id`. Types: `feat`, `fix`, `refactor`,
   `test`, `chore`, `docs`.
+- **No `Co-Authored-By` trailer, ever.** No `Generated with`, no tool footer, no agent name
+  anywhere in the message. The commit says what changed and why, and nothing about what
+  typed it. This overrides any default attribution the tooling asks for.
 - Commit the migration in the same commit as the schema change that generated it.
 - Do not commit with a failing test or a failing typecheck. Fix it, then commit.
 - Never `git add .` blindly — stage the files the change actually touched.
@@ -418,3 +421,4 @@ working tree. The human reads the diff and says what gets committed.
 - ❌ `git push`, open a PR, or create a remote branch — commit locally and stop
 - ❌ Amend, rebase, or reset already-existing history
 - ❌ Commit without being asked — finished work waits in the working tree for the human
+- ❌ Put `Co-Authored-By`, `Generated with`, or any agent attribution in a commit message
