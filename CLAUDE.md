@@ -315,6 +315,25 @@ per-workspace config divergence.
 
 ---
 
+## Documentation — the README tracks the current state
+
+**Every change updates `README.md` in the same working tree as the change.** The
+README is the status of the project as it is right now, not as it was at the last
+milestone: what runs, what does not, what the tests say, what the commands are.
+A change that leaves it describing the previous state has not landed.
+
+- Renamed a command, a port, an env var, a route? The README says the new one.
+- Broke or fixed a test, a spec, a whole runner? The README's test status says so,
+  with the number, not "some tests fail".
+- Added a step to getting started, or removed one? The block under **Démarrage** is
+  copy-pasteable on a clean clone, and that is what it is checked against.
+- Added a doc under `docs/`? It gets a row in the README's documentation table.
+- Deep detail goes in `docs/[topic].md` and the README links to it. The README stays
+  the map, not the manual.
+
+If a change makes the README shorter, that is a valid update. What is not valid is
+leaving it saying something that is no longer true.
+
 ## Git — never commit unless told, never push
 
 Committing is the human's call. Finish the work, say what's done, and leave it in the
@@ -420,5 +439,6 @@ working tree. The human reads the diff and says what gets committed.
 - ❌ Run the container as root
 - ❌ `git push`, open a PR, or create a remote branch — commit locally and stop
 - ❌ Amend, rebase, or reset already-existing history
+- ❌ Land a change without updating `README.md` to the state that change leaves the project in
 - ❌ Commit without being asked — finished work waits in the working tree for the human
 - ❌ Put `Co-Authored-By`, `Generated with`, or any agent attribution in a commit message
