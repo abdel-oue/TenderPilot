@@ -153,6 +153,36 @@ export default class DocumentRepository {
   }
 
   /**
+   * Rewrites one page in place, for a chunk repaired by a later OCR pass.
+   *
+   * The embedding is left alone: an unread page never had one, so the row stays in
+   * findUnembeddedChunks() and the next indexing run picks it up with no special
+   * case anywhere.
+   *
+   * @param {string} chunkId
+   * @param {{ content: string, extraction: string }} values
+   * @returns {Promise<void>}
+   */
+  async updateChunk(chunkId, { content, extraction }) {
+    await this.db
+      .update(documentChunks)
+      .set({ content, extraction })
+      .where(eq(documentChunks.id, chunkId));
+  }
+
+  /**
+   * @param {string} documentId
+   * @param {string} extractionPath text_layer|ocr|mixed|pending
+   * @returns {Promise<void>}
+   */
+  async updateExtractionPath(documentId, extractionPath) {
+    await this.db
+      .update(documents)
+      .set({ extractionPath })
+      .where(eq(documents.id, documentId));
+  }
+
+  /**
    * @param {string} chunkId
    * @param {number[]} embedding
    * @returns {Promise<void>}
