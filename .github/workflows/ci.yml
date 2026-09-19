@@ -49,7 +49,7 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: apps/web
 
-      # Starts its own Next server on 127.0.0.1:3101 (see playwright.workspace.config.ts)
+      # Starts its own Next server on 127.0.0.1:4101 (see playwright.workspace.config.ts)
       # and mocks every api call. `smoke.spec.ts` is not in this suite: it is the
       # only spec that wants the real stack and the real model.
       - name: Browser tests

@@ -17,7 +17,7 @@ import { MAX_UPLOAD_BYTES } from './lib/uploads.js';
 
 const app = Fastify({ loggerInstance: logger });
 
-// credentials: the session cookie is cross-origin (web :3100 -> api :3000).
+// credentials: the session cookie is cross-origin (web :4100 -> api :4000).
 await app.register(cors, { origin: env.WEB_ORIGIN, credentials: true });
 
 // EX-01: a dossier is deposited as a PDF from the interface. One file per

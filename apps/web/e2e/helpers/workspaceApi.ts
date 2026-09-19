@@ -102,11 +102,11 @@ export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
     style.textContent = "nextjs-portal { display: none !important; }";
     document.addEventListener("DOMContentLoaded", () => document.head.append(style));
   });
-  await page.route("http://localhost:3000/**", async (route) => {
+  await page.route("http://localhost:4000/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     const send = (json: unknown, status = 200) => route.fulfill({ status, json });
-    if (method === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "http://127.0.0.1:3101", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET,POST,PATCH", "access-control-allow-headers": "content-type" } });
+    if (method === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "http://127.0.0.1:4101", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET,POST,PATCH", "access-control-allow-headers": "content-type" } });
     if (method === "POST") state.posts.push(path);
     if (path === "/auth/me") return state.signedIn ? send({ user: USER }) : send({ error: "Non connecté", code: "UNAUTHORIZED" }, 401);
     if (path === "/auth/login" || path === "/auth/signup") {

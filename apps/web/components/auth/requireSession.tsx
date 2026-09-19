@@ -14,7 +14,7 @@ interface RequireSessionProps {
  * a dashboard-shaped error page instead of the login form.
  *
  * The session cookie is httpOnly and set by the api on another origin, so Next
- * middleware on :3100 cannot read it. The check has to happen client side,
+ * middleware on :4100 cannot read it. The check has to happen client side,
  * against /auth/me, which is why this is a component and not middleware.
  */
 export default function RequireSession({ children }: RequireSessionProps) {

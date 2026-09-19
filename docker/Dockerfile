@@ -28,7 +28,7 @@ FROM deps AS build
 WORKDIR /app
 # NEXT_PUBLIC_* is baked into the client bundle at build time, so it is an ARG.
 # Public by definition — nothing sensitive goes here.
-ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY packages/shared/src packages/shared/src
 COPY apps/web apps/web
@@ -63,7 +63,7 @@ VOLUME /app/uploads
 
 USER node
 WORKDIR /app/apps/api
-EXPOSE 3000
+EXPOSE 4000
 CMD ["node", "src/server.js"]
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ CMD ["node", "src/server.js"]
 # ---------------------------------------------------------------------------
 FROM base AS web
 WORKDIR /app
-ENV NODE_ENV=production PORT=3100 HOSTNAME=0.0.0.0
+ENV NODE_ENV=production PORT=4100 HOSTNAME=0.0.0.0
 
 # outputFileTracingRoot is the repo root, so the standalone tree mirrors the
 # workspace: the server entry lands at apps/web/server.js, not ./server.js.
@@ -80,5 +80,5 @@ COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public
 
 USER node
-EXPOSE 3100
+EXPOSE 4100
 CMD ["node", "apps/web/server.js"]

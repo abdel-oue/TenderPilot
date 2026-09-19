@@ -59,7 +59,7 @@ services:
       target: api
     environment: &api_env
       NODE_ENV: production
-      PORT: 3000
+      PORT: 4000
       WEB_ORIGIN: ${WEB_ORIGIN}
       LOG_LEVEL: ${LOG_LEVEL}
       JWT_SECRET: ${JWT_SECRET}
@@ -92,18 +92,18 @@ services:
     # on every restart.
     command: >
       sh -c "node src/db/migrate.js && node src/db/seed/index.js && node src/server.js"
-    # Container-side stays 3000 (see PORT above); only the host side moves, so
+    # Same number inside and out: the api listens on 4000 and is published on
     # it can sit beside whatever else the machine already runs. Loopback-only:
     # nginx is the single public entrypoint.
     ports:
-      - "127.0.0.1:${API_HOST_PORT:-4000}:3000"
+      - "127.0.0.1:${API_HOST_PORT:-4000}:4000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -134,10 +134,10 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     environment:
       NODE_ENV: production
-      PORT: 3100
-    # Container-side stays 3100; host side configurable, loopback-only.
+      PORT: 4100
+    # Same number inside and out; host side configurable, loopback-only.
     ports:
-      - "127.0.0.1:${WEB_HOST_PORT:-4100}:3100"
+      - "127.0.0.1:${WEB_HOST_PORT:-4100}:4100"
     depends_on:
       api:
         condition: service_healthy

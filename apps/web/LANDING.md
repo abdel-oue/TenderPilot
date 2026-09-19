@@ -6,7 +6,7 @@ Run from the repository root:
 npm run dev:web
 ```
 
-Open http://localhost:3100. French and the light theme are the defaults. The language
+Open http://localhost:4100. French and the light theme are the defaults. The language
 switch updates `?lang=fr` / `?lang=en` and remembers the choice in a cookie. Theme
 preferences are saved by `next-themes`. Both preferences work independently.
 

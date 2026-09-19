@@ -1,7 +1,7 @@
 // The one fetch wrapper. Every lib/api/[entity].ts file goes through it, so the
 // credentials mode, the error shape and the JSON handling are defined once.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /** The api's error shape, verbatim: `{ error, code }`. */
 export class ApiError extends Error {
@@ -25,7 +25,7 @@ export async function request(path: string, options: RequestOptions = {}): Promi
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    // The session is an httpOnly cookie on another origin (web :3100 -> api :3000).
+    // The session is an httpOnly cookie on another origin (web :4100 -> api :4000).
     credentials: "include",
     // Never set content-type on a FormData: the browser has to add the multipart
     // boundary itself, and an explicit header overwrites it with a broken one.

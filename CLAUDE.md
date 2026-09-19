@@ -394,7 +394,7 @@ working tree. The human reads the diff and says what gets committed.
   `.dockerignore` — a per-app one is never read with a root context.
 - Never run api and web as two processes in one container. Separate targets, separate
   containers.
-- Ports: api **3000**, web **3100**. `WEB_ORIGIN` on the api must match the web origin.
+- Ports: api **4000**, web **4100**, inside the container as well as on the host. `WEB_ORIGIN` on the api must match the web origin.
   `NEXT_PUBLIC_API_URL` is baked into the web bundle at build time, so it is a build arg.
 - Compose services: `web`, `api`, `worker`, `postgres`, `redis`. Postgres and redis have
   healthchecks; api and worker use `depends_on: condition: service_healthy`.

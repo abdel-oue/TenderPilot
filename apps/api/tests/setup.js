@@ -8,8 +8,8 @@
  * quietly hitting a developer's dev database.
  */
 process.env.NODE_ENV ??= 'test';
-process.env.PORT ??= '3000';
-process.env.WEB_ORIGIN ??= 'http://localhost:3100';
+process.env.PORT ??= '4000';
+process.env.WEB_ORIGIN ??= 'http://localhost:4100';
 process.env.DATABASE_URL ??= 'postgres://test:test@127.0.0.1:1/tenderpilot_test';
 process.env.REDIS_URL ??= 'redis://127.0.0.1:1';
 process.env.JWT_SECRET ??= '0'.repeat(64);

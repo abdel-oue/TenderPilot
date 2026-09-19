@@ -7,8 +7,8 @@ import { z } from 'zod';
 // can be dropped in unmodified. Two providers on purpose - see MODEL ROUTING.
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  WEB_ORIGIN: z.url().default('http://localhost:3100'),
+  PORT: z.coerce.number().int().positive().default(4000),
+  WEB_ORIGIN: z.url().default('http://localhost:4100'),
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 chars: openssl rand -hex 32'),
