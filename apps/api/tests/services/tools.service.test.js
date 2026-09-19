@@ -467,6 +467,19 @@ describe('compute_deadline', () => {
     expect(ToolsService.computeDeadline('le mois prochain').error).toMatch(/illisible/);
   });
 
+  it('keeps the submission hour a CPS writes next to its deadline', () => {
+    const result = ToolsService.computeDeadline('08/07/2026 a 09h30', '2026-06-26');
+    expect(result.error).toBeUndefined();
+    expect(result.joursCalendaires).toBe(12);
+    expect(result.heureLimite).toBe('09:30');
+    expect(result.note).toMatch(/09:30/);
+  });
+
+  it('leaves the hour null when the dossier did not give one', () => {
+    const result = ToolsService.computeDeadline('08/07/2026', '2026-06-26');
+    expect(result.heureLimite).toBeNull();
+  });
+
   it('admits that Moroccan public holidays are not deducted', () => {
     expect(ToolsService.computeDeadline('2026-03-12', '2026-03-02').note).toMatch(/feries/);
   });

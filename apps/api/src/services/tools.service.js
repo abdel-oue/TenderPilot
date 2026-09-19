@@ -42,7 +42,13 @@ import {
   ASK_HUMAN_OPTIONS,
   ASK_HUMAN_QUESTION,
 } from '../prompts/askHuman.prompts.js';
-import { businessDaysBetween, daysBetween, parseDate, toIsoDate } from '../lib/dates.js';
+import {
+  businessDaysBetween,
+  daysBetween,
+  parseDate,
+  parseTime,
+  toIsoDate,
+} from '../lib/dates.js';
 import { calculate } from '../lib/calc.js';
 import { ocrAvailable, ocrPages } from '../lib/ocr.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
@@ -147,9 +153,15 @@ export default class ToolsService {
         'compute_deadline',
         'Arithmetique de dates : jours calendaires et jours ouvres restants avant ' +
           'une echeance. Ne calcule JAMAIS une date de tete, appelle cet outil. ' +
-          'Formats acceptes : 2026-03-12, 12/03/2026, "12 mars 2026".',
+          'Formats acceptes : 2026-03-12, 12/03/2026, "12 mars 2026", avec une ' +
+          'heure facultative : "12/03/2026 a 09h30".',
         {
-          deadline: { type: 'string', description: "La date d'echeance" },
+          deadline: {
+            type: 'string',
+            description:
+              "La date d'echeance, telle qu'elle est ecrite dans le dossier. Garde " +
+              "l'heure de depot si le CPS en donne une, ne la retire pas.",
+          },
           from: { type: 'string', description: "Date de depart (defaut : aujourd'hui)" },
         },
         ['deadline'],
@@ -791,7 +803,8 @@ export default class ToolsService {
         error:
           'Date illisible : "' +
           deadline +
-          '". Formats acceptes : 2026-03-12, 12/03/2026, "12 mars 2026".',
+          '". Formats acceptes : 2026-03-12, 12/03/2026, "12 mars 2026", ' +
+          'avec une heure facultative : "12/03/2026 a 09h30".',
       };
     }
 
@@ -799,9 +812,11 @@ export default class ToolsService {
     if (!start) return { error: 'Date de depart illisible : "' + from + '".' };
 
     const calendar = daysBetween(start, target);
+    const heureLimite = parseTime(deadline);
 
     return {
       deadline: toIsoDate(target),
+      heureLimite,
       from: toIsoDate(start),
       joursCalendaires: calendar,
       joursOuvres: businessDaysBetween(start, target),
@@ -809,7 +824,11 @@ export default class ToolsService {
       note:
         'Jours ouvres = hors samedi et dimanche. Les jours feries marocains ne sont ' +
         'PAS deduits (plusieurs suivent le calendrier lunaire) : traite ce chiffre ' +
-        'comme un maximum et dis-le.',
+        'comme un maximum et dis-le.' +
+        (heureLimite
+          ? ' Le dernier jour n est pas un jour entier : le depot ferme a ' +
+            heureLimite + '.'
+          : ''),
     };
   }
 }

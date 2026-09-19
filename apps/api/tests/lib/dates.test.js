@@ -3,6 +3,7 @@ import {
   businessDaysBetween,
   daysBetween,
   parseDate,
+  parseTime,
   toIsoDate,
 } from '../../src/lib/dates.js';
 
@@ -30,10 +31,49 @@ describe('parseDate', () => {
     expect(parseDate('32/01/2026')).toBeNull();
   });
 
+  it('reads a date followed by the hour a CPS always writes', () => {
+    // "Les plis doivent parvenir [...] au plus tard le 08/07/2026 a 09h30" is the
+    // normal shape of a Moroccan deadline, not an edge case.
+    for (const input of [
+      '08/07/2026 09:30',
+      '08/07/2026 à 09h30',
+      '08/07/2026 a 09h30',
+      '08/07/2026 09h30',
+      '8 juillet 2026 à 09h30',
+    ]) {
+      expect(toIsoDate(parseDate(input))).toBe('2026-07-08');
+    }
+  });
+
+  it('tolerates an hour without dropping the anchor', () => {
+    // The point of the optional suffix is tolerance, not the removal of `$`.
+    expect(parseDate('08/07/20261')).toBeNull();
+    expect(parseDate('08/07/2026 xyz')).toBeNull();
+    expect(parseDate('08/07/2026 25h70')).toBeNull();
+  });
+
   it('refuses what it cannot parse instead of guessing', () => {
     for (const input of ['demain', 'le mois prochain', '', 'mars', null, undefined, 42]) {
       expect(parseDate(input)).toBeNull();
     }
+  });
+});
+
+describe('parseTime', () => {
+  it('extracts the hour in every shape the corpus writes it', () => {
+    expect(parseTime('08/07/2026 09h30')).toBe('09:30');
+    expect(parseTime('08/07/2026 09:30')).toBe('09:30');
+    expect(parseTime('08/07/2026 à 10h00')).toBe('10:00');
+    expect(parseTime('8 juillet 2026 a 09h30')).toBe('09:30');
+    expect(parseTime('2026-07-08T09:30:00Z')).toBe('09:30');
+  });
+
+  it('answers null rather than inventing an hour nobody wrote', () => {
+    // "23h59" would be a precision the CPS did not give.
+    expect(parseTime('08/07/2026')).toBeNull();
+    expect(parseTime('2026-07-08')).toBeNull();
+    expect(parseTime('8 juillet 2026')).toBeNull();
+    expect(parseTime('le mois prochain')).toBeNull();
   });
 });
 
