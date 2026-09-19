@@ -8,15 +8,15 @@
   },
   "main": "src/server.js",
   "scripts": {
-    "dev": "node --watch --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/server.js",
+    "dev": "node --watch --env-file=../../.env src/server.js",
     "start": "node src/server.js",
-    "worker": "node --watch --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/worker.js",
+    "worker": "node --watch --env-file=../../.env src/worker.js",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/db/migrate.js",
-    "db:seed": "node --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/db/seed/index.js",
-    "db:index": "node --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/db/reindex.js",
-    "db:reset": "node --env-file=../../.env --env-file-if-exists=../../docker/.env.local src/db/seed/reset.js"
+    "db:migrate": "node --env-file=../../.env src/db/migrate.js",
+    "db:seed": "node --env-file=../../.env src/db/seed/index.js",
+    "db:index": "node --env-file=../../.env src/db/reindex.js",
+    "db:reset": "node --env-file=../../.env src/db/seed/reset.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

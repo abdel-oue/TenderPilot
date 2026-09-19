@@ -29,30 +29,29 @@ npm portent à votre place.
 
 ```bash
 # l'équivalent explicite de npm run up
-node scripts/localSecrets.mjs
-docker compose -f docker/docker-compose.yml   --env-file .env --env-file docker/.env.local up -d --build
+docker compose -f docker/docker-compose.yml --env-file .env up -d --build
 ```
 
-## Les deux fichiers d'environnement
+## Un seul fichier d'environnement
 
-| Fichier | Qui l'écrit | Contenu | Lu par |
-|---|---|---|---|
-| `.env` | vous, depuis `.env.example` | clés modèle, ports, origines | `npm run up` **et** `npm run up:vps` |
-| `docker/.env.local` | `scripts/localSecrets.mjs`, une fois | `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_SECRET` tirés au sort | `npm run up` seulement |
+`.env`, à la racine, copié depuis `.env.example` et gitignoré. Il est lu par
+`npm run up` **et** par `npm run up:vps` ; les scripts hôte (`npm run db:migrate`,
+`db:seed`, `dev:api`…) le passent à Node avec `--env-file=../../.env`.
 
-Les deux sont gitignorés. Compose accepte plusieurs `--env-file` et **le dernier
-gagne**, donc les valeurs générées écrasent celles de `.env` pour la pile locale,
-et uniquement pour elle : `npm run up:vps` ne passe que `--env-file .env`, si bien
-que le serveur garde ses vraies informations d'identification.
+Le mot de passe Postgres local est une valeur ordinaire de ce fichier, pas un
+secret tiré au sort : le port n'est publié que sur `127.0.0.1`, la base n'est
+jamais joignable depuis l'extérieur de la machine. Sur le VPS, `.env` contient
+les vraies informations d'identification — c'est le même fichier, rempli
+autrement.
 
-C'est ce qui fait qu'une personne qui clone le dépôt et lance `npm run up` obtient
-sa propre base, avec son propre mot de passe, sans jamais recevoir celui de la
-production. Compose n'a pas de générateur : le tirage vit forcément dans un script
-à côté, pas dans le fichier compose.
+Postgres n'applique `POSTGRES_PASSWORD` qu'en initialisant un volume **vide**.
+Sur un `pgdata` existant il garde l'ancien, et l'api meurt sur `28P01`. Réaligner
+le rôle sans perdre les données :
 
-Les scripts hôte (`npm run db:migrate`, `db:seed`, `dev:api`…) passent
-`--env-file=.env --env-file-if-exists=docker/.env.local` pour la même raison — sans
-ça, `db:seed` utiliserait le mot de passe de production contre la base locale.
+```bash
+docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot \
+  -c "ALTER USER tenderpilot WITH PASSWORD '<POSTGRES_PASSWORD de .env>'"
+```
 
 ## Variables d'environnement
 
@@ -67,7 +66,7 @@ Tout est dans `.env.example`. Les seules qu'il faut réellement remplir :
 | `TAVILY_API_KEY` | **non** | absente = l'outil `web_search` n'est pas proposé |
 | `STUB_LLM` | non | `1` = aucun appel fournisseur (tests, CI) |
 | `OCR_LANG` | non | packs tesseract joints par `+`, défaut `fra+eng` ; les deux sont dans l'image api |
-| `POSTGRES_PASSWORD` | non en local | généré dans `docker/.env.local` ; à remplir dans `.env` **uniquement** sur le VPS |
+| `POSTGRES_PASSWORD` | oui | `tenderpilot` convient en local (port loopback) ; une vraie valeur sur le VPS |
 
 `EMBEDDING_DIMENSIONS` doit valoir 512 : la colonne `vector(512)` est figée dans la
 DDL, et un écart échoue à l'insertion.

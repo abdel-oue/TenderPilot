@@ -38,9 +38,10 @@ npm run db:index         # (re)plonger le corpus, idempotent
 npm test                 # la suite unitaire, sans réseau ni base
 ```
 
-`npm run up` écrit `docker/.env.local` au premier lancement : un mot de passe
-Postgres et un `JWT_SECRET` tirés au sort **pour cette installation**, gitignorés.
-Deux machines ne partagent jamais le même mot de passe de base.
+`.env` est le seul fichier de configuration : `npm run up` et `npm run up:vps`
+lisent le même. Le mot de passe Postgres local y reste une valeur ordinaire — le
+port n'est publié que sur `127.0.0.1`, la base n'est joignable que depuis la
+machine.
 
 Les ports publiés sont des variables (`API_HOST_PORT` 4000, `WEB_HOST_PORT` 4100,
 `POSTGRES_HOST_PORT` 5433) et n'écoutent que sur `127.0.0.1`. Le même numéro vaut
@@ -215,7 +216,6 @@ tenderpilot/
 ├── packages/shared/      # schémas zod partagés web ↔ api (JavaScript)
 ├── docker/               # Dockerfile unique, compose, init.sql  → docs/deployment.md
 ├── docs/                 # la documentation, les diagrammes, le vhost nginx
-├── scripts/              # localSecrets.mjs — les secrets par machine
 └── .env.example          # toutes les clés, valeurs vides
 ```
 
