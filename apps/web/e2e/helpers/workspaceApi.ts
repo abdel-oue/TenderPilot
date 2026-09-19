@@ -39,9 +39,30 @@ export const REQUIREMENTS = [
 /** The analysis payload as the api sends it. Loose on purpose: a test builds
  *  partial envelopes (queued, failed, no sections) from the fixture above. */
 type Envelope = Record<string, unknown> | null;
-interface MockOptions { signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean }
+// A filled company: the shape /company sends once a profil-entreprise.json has been
+// imported. Two secteurs and two document kinds, so the filters have something to do.
+export const COMPANY = {
+  profile: { ice: "001234567000089", raisonSociale: "Atlas Ingenierie SARL", siege: "Casablanca", effectif: 42, certifications: ["ISO 9001:2015", "Qualiopi"], secteurs: ["Ferroviaire", "Industrie"] },
+  references: [
+    { id: "REF-01", client: "ONCF", secteur: "Ferroviaire", objet: "Maintenance des voies sur la ligne Casablanca-Rabat" },
+    { id: "REF-02", client: "OCP", secteur: "Industrie", objet: "Genie civil sur le site de Khouribga" },
+  ],
+  team: [{ id: "CV-01", initiales: "S.B.", poste: "Directrice de projet", anneesExperience: 14 }],
+};
+export const COMPANY_DOCUMENTS = [
+  { id: "d10", kind: "attestation", originalName: "attestation-fiscale.pdf", pageCount: 2, extractionPath: "text" },
+  { id: "d11", kind: "memoire", originalName: "memoire-technique-2025.pdf", pageCount: 18, extractionPath: "text" },
+];
+interface MockOptions { signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean; company?: boolean }
 export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
-  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], posts: [] as string[], patches: [] as unknown[] };
+  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, posts: [] as string[], patches: [] as unknown[] };
+  // The Next dev overlay button sits in the bottom-left corner, on top of the rail's
+  // account control. It only exists under `next dev`, so hide it for the whole run.
+  await page.addInitScript(() => {
+    const style = document.createElement("style");
+    style.textContent = "nextjs-portal { display: none !important; }";
+    document.addEventListener("DOMContentLoaded", () => document.head.append(style));
+  });
   await page.route("http://localhost:3000/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
@@ -55,8 +76,8 @@ export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
       return send({ user: USER });
     }
     if (path === "/auth/logout") { state.signedIn = false; return route.fulfill({ status: 204 }); }
-    if (path === "/company") return send({ profile: null, references: [], team: [] });
-    if (path === "/company/documents") return send({ documents: [] });
+    if (path === "/company") return send(state.company ? COMPANY : { profile: null, references: [], team: [] });
+    if (path === "/company/documents") return send({ documents: state.company ? COMPANY_DOCUMENTS : [] });
     if (path === "/tenders" && method === "GET") return state.failTenders ? send({ error: "Service temporairement indisponible", code: "UNAVAILABLE" }, 503) : send({ tenders: state.empty ? [] : TENDERS });
     if (path === "/tenders" && method === "POST") return send({ ...TENDERS[3], ...route.request().postDataJSON(), id: "created", documents: [] });
     if (path.endsWith("/documents") && method === "POST") return state.uploadFailure ? send({ error: "Envoi interrompu. Réessayez.", code: "UPLOAD_FAILED" }, 503) : send({ id: "doc", kind: "avis", originalName: "avis.pdf", pageCount: 1, extractionPath: "pending" });

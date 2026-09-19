@@ -12,16 +12,17 @@ describe("dashboard data", () => {
     expect(filterTenders([tender], "technique", "no-go")).toHaveLength(0);
     expect(filterTenders([tender], "2026-001", "all")).toHaveLength(1);
   });
-  it("excludes expired, invalid and no-go deadlines and keeps the current day", () => {
-    const rows = [tender, { ...tender, id: "old", deadline: "2026-09-17" }, { ...tender, id: "today", deadline: "2026-09-18" }, { ...tender, id: "bad", deadline: "invalid" }, { ...tender, id: "no", analysis: { ...tender.analysis!, verdict: "no-go" as const } }];
-    const result = dashboardSummary(rows, new Date(2026, 8, 18, 12));
+  it("counts each dossier under its own state", () => {
+    const rows = [tender, { ...tender, id: "old" }, { ...tender, id: "running", analysis: { ...tender.analysis!, status: "running" as const } }, { ...tender, id: "broken", status: "failed" as const }, { ...tender, id: "no", analysis: { ...tender.analysis!, verdict: "no-go" as const } }];
+    const result = dashboardSummary(rows);
     expect(result.total).toBe(5);
-    expect(result.counts.go).toBe(4);
-    expect(result.deadlines.map((row) => row.id)).toEqual(["today", "t1"]);
+    expect(result.counts.go).toBe(2);
+    expect(result.counts["no-go"]).toBe(1);
+    expect(result.counts.active).toBe(1);
+    expect(result.counts.failed).toBe(1);
   });
   it("handles an empty account and absent dates", () => {
     expect(dashboardSummary([]).total).toBe(0);
-    expect(dashboardSummary([]).deadlines).toEqual([]);
     expect(shortDate("invalid")).toBe("Non renseignée");
     expect(shortDate(null)).toBe("Non renseignée");
   });

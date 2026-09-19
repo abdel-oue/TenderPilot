@@ -45,7 +45,6 @@ test("renders real counts, navigates, searches and filters on desktop and mobile
   await page.goto("/dashboard");
   await expect(page.getByTestId("stat-0")).toHaveText("04");
   await expect(page.getByTestId("stat-1")).toHaveText("01");
-  await expect(page.getByTestId("dashboard-deadlines")).not.toContainText("AO-2026-002");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true });
   if (isMobile) {
@@ -63,6 +62,9 @@ test("renders real counts, navigates, searches and filters on desktop and mobile
   await expect(page.getByTestId("tenders-empty")).toBeVisible();
   await page.getByTestId("tender-search").fill("digitale");
   await expect(page.getByTestId("tender-row")).toHaveCount(1);
+  await page.getByTestId("density-tenders-compact").click();
+  await page.reload();
+  await expect(page.getByTestId("density-tenders-compact")).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
@@ -115,16 +117,43 @@ test("reports invalid company profile files without sending them", async ({ page
   expect(state.posts).toEqual([]);
 });
 
+test("filters references and documents and remembers each list's density", async ({ page }, testInfo) => {
+  await mockWorkspaceApi(page, { company: true });
+  await page.goto("/company");
+  const references = page.getByTestId("company-references").getByRole("listitem");
+  await expect(references).toHaveCount(2);
+  await page.getByTestId("reference-filter-Ferroviaire").click();
+  await expect(references).toHaveCount(1);
+  await expect(references.first()).toContainText("ONCF");
+  await page.getByTestId("reference-filter-all").click();
+  await expect(references).toContainText(["ONCF", "OCP"]);
+  const documents = page.getByTestId("company-documents").getByRole("listitem");
+  await expect(documents).toHaveCount(2);
+  await page.getByTestId("document-filter-memoire").click();
+  await expect(documents).toHaveCount(1);
+  await expect(documents.first()).toContainText("memoire-technique-2025.pdf");
+  // Two lists on one page, each with its own remembered density.
+  await page.getByTestId("density-references-compact").click();
+  await page.reload();
+  await expect(page.getByTestId("density-references-compact")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("density-documents-normal")).toHaveAttribute("aria-pressed", "true");
+  await page.screenshot({ path: testInfo.outputPath("company.png"), fullPage: true });
+});
+
 test("persists theme and logs out without retaining the old dashboard", async ({ page, isMobile }) => {
   const state = await mockWorkspaceApi(page);
   await page.goto("/dashboard");
-  await page.getByTestId("workspace-theme").click();
+  const scope = isMobile ? "mobile-" : "";
+  // The theme toggle now lives in the account menu, beside the email and the guide.
+  if (isMobile) await page.getByTestId("workspace-menu").click();
+  await page.getByTestId(`${scope}workspace-account`).click();
+  await page.getByTestId(`${scope}workspace-theme`).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.reload();
   await expect(page.locator("html")).toHaveClass(/dark/);
   if (isMobile) await page.getByTestId("workspace-menu").click();
-  const scope = isMobile ? "mobile-" : "";
   await page.getByTestId(`${scope}workspace-account`).click();
+  await expect(page.getByTestId(`${scope}workspace-email`)).toContainText("@");
   await page.getByTestId(`${scope}workspace-logout`).click();
   await expect(page.getByTestId("auth-panel")).toBeVisible();
   expect(state.signedIn).toBe(false);

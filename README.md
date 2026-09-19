@@ -66,22 +66,29 @@ Détails, variables, mise en production et diagnostic :
 
 - `/login` : connexion (redirection par défaut quand la session expire) ; `/signup` : création de compte et accueil
   dans le profil entreprise.
-- `/dashboard` : compteurs réels, décisions go / no-go, dossiers récents,
-  échéances à venir et progression des analyses.
-- `/tenders` : recherche et filtres ; `/tenders/new` : dépôt PDF avec reprise
-  après une erreur d’envoi, sans recréer le dossier dans la même session.
-- Coque à fond unique : la barre latérale et la barre du haut flottent sur le même
-  fond, sans panneau ni filet. Barre du haut en trois zones — fil d'Ariane, logo au
-  centre, thème et **Nouveau dossier** à droite.
-- Barre latérale centrée (icône + libellé), menu mobile au clavier, transitions avec
-  mouvement réduit. Le compte est en bas : avatar, nom et e-mail ; un clic ouvre la
-  déconnexion. Il n'y a plus d'écran Paramètres, le thème est dans la barre du haut.
+- `/dashboard` : compteurs réels, décisions go / no-go, dossiers récents et
+  progression des analyses.
+- `/tenders` : recherche, filtres et densité d'affichage ; `/tenders/new` : dépôt
+  PDF avec reprise après une erreur d’envoi, sans recréer le dossier dans la même
+  session.
+- Barre du haut pleine largeur, d'un bord à l'autre de la fenêtre, en trois zones —
+  fil d'Ariane, logo au centre, **Nouveau dossier** à droite.
+- Sous elle, un rail flottant à gauche : des boutons en icône seule sur `bg-surface`,
+  centrés verticalement, le libellé apparaissant au survol. Menu mobile au clavier
+  (tiroir avec les libellés), transitions avec mouvement réduit.
+- En bas du rail, le compte — icône et nom. Un clic ouvre l'e-mail du compte,
+  **Guide de démarrage**, le thème et la déconnexion. Il n'y a plus d'écran
+  Paramètres, et le thème n'est plus dans la barre du haut.
+- Chaque liste longue — dossiers, documents, références — porte les mêmes deux
+  contrôles : des filtres et un choix **normal / compact**, retenu par liste d'une
+  visite à l'autre dans le navigateur.
 - `/dashboard/controle` : **Contrôle**, la page qui affichera le raisonnement de
   l'IA, les jetons consommés et le temps passé. La trace du graphe ne porte pas
   encore ces mesures, la page dit ce qu'elle attend plutôt que d'inventer un chiffre.
 - Vitrine : barre de navigation compacte, liens centrés, sélecteur de langue en
   icône globe avec menu déroulant, et un seul bouton d'action visible, **Connexion**.
-- `/company` : import du profil depuis un fichier JSON et documents de référence.
+- `/company` : import du profil depuis un fichier JSON, **vos références**
+  filtrables par secteur, et vos documents de référence filtrables par type.
 - `/tenders/[id]` : le verdict, les points bloquants cités page et article, le
   **détail de la notation** critère par critère, les risques que l'agent a signalés
   sans en faire une disqualification, la matrice de conformité où chaque exigence
@@ -104,7 +111,7 @@ Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour n
 pas tester accidentellement le serveur de développement sur `:3100` ni la pile
 Docker sur `:4100`.
 
-Vérification frontend au 18/09/2026 : **13 tests unitaires passent ; 47 tests
+Vérification frontend au 19/09/2026 : **13 tests unitaires passent ; 49 tests
 navigateur passent, 1 test réservé au mobile est ignoré sur desktop**. Le lint et le
 build de production font partie des vérifications de cette interface. Les tests
 navigateur utilisent une API simulée et ne constituent pas un test d’intégration du
