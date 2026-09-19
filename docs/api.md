@@ -1,6 +1,6 @@
 # API
 
-Base locale : `http://localhost:3000`. Toutes les réponses sont en JSON sauf
+Base locale : `http://localhost:4000`. Toutes les réponses sont en JSON sauf
 `GET /documents/:id/file`.
 
 **Forme d'erreur unique**, quel que soit l'endpoint :
@@ -298,11 +298,12 @@ data: {"type":"tool","node":"matchProfile","name":"search_documents","raison":"�
 data: {"type":"ask","question":{ "askId":"…","question":"…","options":[…] }}
 ```
 
-La trame `tool` est la seule chose que le sondage ne peut pas donner : la trace
-n'écrit une ligne qu'à la **fin** d'un nœud, alors que celle-ci part quand l'outil
-rend la main. Le reste est un miroir. **Le sondage reste** : c'est lui qui rend
-l'écran juste après un rafraîchissement, une reconnexion, ou sur un réseau qui
-mange le SSE.
+Les trames `node` et `tool` portent un `id`, un `startedAt` et un statut
+`running`, puis `ok`, `error` ou `paused`. La durée `ms` est mesurée à la fin
+de l'opération. Chaque transition est également enregistrée dans `nodeTrace` :
+le sondage retrouve donc les outils en cours après rechargement ou reconnexion.
+Le client remplace un appel par son `id`, sans fusionner deux appels distincts
+qui auraient le même résultat. L'attente en file ne démarre aucun minuteur d'étape.
 
 Le worker publie sur Redis (`run:<runId>`), l'api relaie. Une ligne de
 commentaire toutes les 15 s empêche un proxy de fermer une connexion inactive.
@@ -401,7 +402,7 @@ autre, et il a lieu avant la lecture. Le run d'un autre compte est `404`, pas
 | `file` | le PDF |
 
 ```bash
-curl -b cookies.txt -F kind=avis -F file=@AO-2026-004.pdf   http://localhost:3000/tenders/$ID/documents
+curl -b cookies.txt -F kind=avis -F file=@AO-2026-004.pdf   http://localhost:4000/tenders/$ID/documents
 ```
 
 Le fichier est validé sur ses octets (`%PDF`), pas sur l'en-tête annoncé, puis
@@ -424,5 +425,27 @@ leur page source), puis une section par catégorie, dans l'ordre de lecture.
 Les marqueurs `[A COMPLETER PAR L'HUMAIN]` sont repris **tels quels**. Un export
 qui les nettoierait rendrait un fichier qui a l'air fini et ne l'est pas.
 
-`409 NOTHING_TO_EXPORT` quand l'analyse n'a rédigé aucune section — ce qui est le
-cas de tout dossier en no-go, volontairement.
+`409 NOTHING_TO_EXPORT` quand l'analyse n'a rédigé aucune section. Un NO-GO
+automatique arrête la rédaction ; un arbitrage humain ultérieur conserve les
+sections déjà produites et leur export.
+
+### `POST /analyses/:runId/decision`
+
+Réexamine une analyse terminée à partir de son checkpoint, puis renvoie `202`.
+Le run doit appartenir à la session, utiliser la version courante du graphe et
+posséder un checkpoint terminé. Les identifiants écartés doivent désigner des
+bloqueurs du résultat actuel.
+
+```json
+{
+  "verdictOverride": "no-go",
+  "dismissedBlockers": [],
+  "instruction": "Capacité opérationnelle indisponible : suspendre la candidature."
+}
+```
+
+Le motif contient au moins dix caractères. `verdictOverride` accepte `go` ou
+`no-go`. L'arbitrage est enregistré dans la trace et injecté dans l'état repris :
+il affecte le verdict calculé. Les avertissements et les erreurs de lecture
+restent visibles ; un GO humain ne devient pas une validation automatique des
+preuves. Suivre ensuite le run avec `GET /tenders/:id/analysis`.
