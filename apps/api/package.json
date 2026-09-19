@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.11"
+    "node": ">=22.18"
   },
   "main": "src/server.js",
   "scripts": {
