@@ -27,7 +27,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
           <button className="cursor-pointer rounded-lg p-2 hover:bg-soft lg:hidden" aria-label="Ouvrir le menu" aria-expanded={open} data-testid="workspace-menu" onClick={() => { setOpen(true); dialog.current?.showModal(); }}><Menu size={19} /></button>
           <span className="hidden text-mini text-muted md:inline">Espace de travail</span><ChevronRight className="hidden text-muted md:block" size={13} /><span className="truncate text-xs font-medium">{title}</span>
         </div>
-        <Link href="/dashboard" aria-label="TenderPilot — Accueil" className="justify-self-center" data-testid="workspace-logo"><BrandLogo className="h-7 w-9 sm:w-9 md:w-9" /></Link>
+        <Link href="/dashboard" aria-label="TenderPilot — Accueil" className="justify-self-center" data-testid="workspace-logo"><BrandLogo /></Link>
         <div className="flex items-center justify-end gap-1 justify-self-end"><Link href="/tenders/new" className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium hover:bg-soft" aria-label="Nouveau dossier"><Plus size={16} /><span className="hidden md:inline">Nouveau dossier</span></Link></div>
       </header>
       <aside className="fixed bottom-0 left-0 top-14 z-30 hidden w-16 lg:block"><Sidebar /></aside>
