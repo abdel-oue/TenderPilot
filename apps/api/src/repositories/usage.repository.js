@@ -2,7 +2,7 @@
  * LLM Usage Repository
  * ALL token-usage SQL. Feeds the usage dashboard.
  */
-import { and, desc, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { llmUsage } from '../db/schema/index.js';
 
@@ -71,21 +71,34 @@ export default class UsageRepository {
 
   /**
    * Spend per agent/node, so an expensive prompt is attributable.
-   * @param {{ since?: Date }} [options]
+   *
+   * `runId` is what the Controle screen filters on. It is also the ONLY scoping
+   * this table has: llm_usage carries no ownerId, so a caller must have checked
+   * that the run belongs to the user before asking for its usage.
+   *
+   * @param {{ since?: Date, runId?: string }} [options]
    * @returns {Promise<object[]>}
    */
-  async summarizeByOperation({ since } = {}) {
+  async summarizeByOperation({ since, runId } = {}) {
     return this.db
       .select({
         operation: llmUsage.operation,
         tier: llmUsage.tier,
+        model: sql`min(${llmUsage.model})`,
         calls: sql`count(*)::int`,
+        promptTokens: sql`coalesce(sum(${llmUsage.promptTokens}), 0)::int`,
+        completionTokens: sql`coalesce(sum(${llmUsage.completionTokens}), 0)::int`,
         totalTokens: sql`coalesce(sum(${llmUsage.totalTokens}), 0)::int`,
         avgLatencyMs: sql`coalesce(round(avg(${llmUsage.latencyMs})), 0)::int`,
         errors: sql`count(*) filter (where ${llmUsage.status} = 'error')::int`,
       })
       .from(llmUsage)
-      .where(since ? gte(llmUsage.createdAt, since) : undefined)
+      .where(
+        and(
+          since ? gte(llmUsage.createdAt, since) : undefined,
+          runId ? eq(llmUsage.runId, runId) : undefined,
+        ),
+      )
       .groupBy(llmUsage.operation, llmUsage.tier)
       .orderBy(desc(sql`sum(${llmUsage.totalTokens})`));
   }

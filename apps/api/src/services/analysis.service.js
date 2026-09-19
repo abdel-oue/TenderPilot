@@ -13,17 +13,20 @@ import { GRAPH_VERSION, buildGraph } from '../graph/index.js';
 import { analysisJobId, analysisQueue } from '../queue/queues.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
 import TenderRepository from '../repositories/tender.repository.js';
+import UsageRepository from '../repositories/usage.repository.js';
 
 export default class AnalysisService {
   /**
    * @param {object} [deps]
    * @param {AnalysisRepository} [deps.analyses]
    * @param {TenderRepository} [deps.tenders]
+   * @param {UsageRepository} [deps.usage]
    * @param {() => Promise<object>} [deps.graphFactory]
    */
-  constructor({ analyses, tenders, graphFactory, queue } = {}) {
+  constructor({ analyses, tenders, usage, graphFactory, queue } = {}) {
     this.analyses = analyses ?? new AnalysisRepository();
     this.tenders = tenders ?? new TenderRepository();
+    this.usage = usage ?? new UsageRepository();
     this.graphFactory = graphFactory ?? buildGraph;
     this.queue = queue ?? analysisQueue;
     this.graph = null;
@@ -246,6 +249,59 @@ export default class AnalysisService {
       pendingQuestion: run.pendingQuestion ?? null,
       result: result ?? null,
       sections,
+    };
+  }
+
+  /**
+   * Every run this user has launched - the Controle screen's list.
+   * @param {string} ownerId
+   * @returns {Promise<object[]>}
+   */
+  async listRuns(ownerId) {
+    const runs = await this.analyses.listRunsForOwner(ownerId);
+    return runs.map((run) => ({
+      ...run,
+      // Enqueue-to-finish. startedAt is the DB default at insert, i.e. when the
+      // job was queued, so this is the wall clock the user actually waited.
+      durationMs: run.finishedAt ? run.finishedAt.getTime() - run.startedAt.getTime() : null,
+    }));
+  }
+
+  /**
+   * One run, in full: what it decided, how long each node took, and what it
+   * spent doing it.
+   *
+   * The ownership check happens FIRST and the usage query is filtered on that
+   * same runId - llm_usage has no ownerId of its own, so this check is the only
+   * thing standing between one user's token bill and another's.
+   *
+   * @param {string} runId
+   * @param {string} ownerId
+   * @returns {Promise<object>}
+   */
+  async getRunDetail(runId, ownerId) {
+    const run = await this.findOwnedRun(runId, ownerId);
+    const [tender, result, usage] = await Promise.all([
+      this.tenders.findById(run.tenderId, ownerId),
+      this.analyses.findResultByRun(runId),
+      this.usage.summarizeByOperation({ runId }),
+    ]);
+
+    return {
+      runId: run.id,
+      tenderId: run.tenderId,
+      reference: tender?.reference ?? null,
+      title: tender?.title ?? null,
+      status: run.status,
+      graphVersion: run.graphVersion,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      durationMs: run.finishedAt ? run.finishedAt.getTime() - run.startedAt.getTime() : null,
+      error: run.error,
+      nodeTrace: run.nodeTrace ?? [],
+      pendingQuestion: run.pendingQuestion ?? null,
+      usage,
+      result: result ?? null,
     };
   }
 

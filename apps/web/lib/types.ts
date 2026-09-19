@@ -133,6 +133,55 @@ export interface AnalysisEnvelope {
   sections: AnalysisSection[];
 }
 
+/** One row of the Contrôle list: a run, its dossier, and what it cost. */
+export interface RunSummary {
+  runId: string;
+  tenderId: string;
+  reference: string;
+  title: string | null;
+  status: AnalysisStatus;
+  graphVersion: string;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  error: string | null;
+  awaiting: boolean;
+  steps: number;
+  totalTokens: number;
+  calls: number;
+}
+
+/** Token spend of one agent within one run, as llm_usage groups it. */
+export interface AgentUsage {
+  operation: string;
+  tier: string;
+  model: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  avgLatencyMs: number;
+  errors: number;
+}
+
+/** One run in full: the expanded row on Contrôle. */
+export interface RunDetail {
+  runId: string;
+  tenderId: string;
+  reference: string | null;
+  title: string | null;
+  status: AnalysisStatus;
+  graphVersion: string;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  error: string | null;
+  nodeTrace: TraceEntry[];
+  pendingQuestion: PendingQuestion | null;
+  usage: AgentUsage[];
+  result: AnalysisResult | null;
+}
+
 /** How the profile answered one requirement, merged into the matrix row. */
 export interface RequirementMatch {
   status: "met" | "partial" | "unmet" | "unknown";

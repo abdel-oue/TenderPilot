@@ -104,6 +104,27 @@ export default class AnalysisController {
   }
 
   /**
+   * GET /analyses - every run this user has launched, newest first.
+   * @param {object} request
+   * @param {object} reply
+   * @returns {Promise<object>}
+   */
+  async list(request, reply) {
+    return reply.send({ runs: await this.analyses.listRuns(request.user.id) });
+  }
+
+  /**
+   * GET /analyses/:runId - one run in full: trace, durations, tokens per agent.
+   * @param {object} request
+   * @param {object} reply
+   * @returns {Promise<object>}
+   */
+  async detail(request, reply) {
+    const { runId } = parseRunIdParam(request.params);
+    return reply.send(await this.analyses.getRunDetail(runId, request.user.id));
+  }
+
+  /**
    * POST /analyses/:runId/answer - the human replies to ask_human and the graph
    * resumes from its checkpoint.
    * @param {object} request

@@ -84,3 +84,26 @@ describe('UsageRepository.summarizeByModel', () => {
     expect(db.calls.where[0]).toBeDefined();
   });
 });
+
+describe('UsageRepository.summarizeByOperation', () => {
+  it('groups by operation and tier, which is the per-agent bill', async () => {
+    const db = fakeDb([]);
+    await new UsageRepository(db).summarizeByOperation();
+    expect(db.calls.groupBy[0]).toHaveLength(2);
+  });
+
+  it('filters on one run, which is the ONLY scoping this table has', async () => {
+    const db = fakeDb([]);
+    await new UsageRepository(db).summarizeByOperation({ runId: 'run-1' });
+    // llm_usage carries no ownerId: an unfiltered read would be one user's
+    // token bill shown to another.
+    expect(db.calls.where[0]).toBeDefined();
+  });
+
+  it('reports prompt and completion tokens separately', async () => {
+    const db = fakeDb([]);
+    await new UsageRepository(db).summarizeByOperation({ runId: 'run-1' });
+    expect(db.calls.projection).toHaveProperty('promptTokens');
+    expect(db.calls.projection).toHaveProperty('completionTokens');
+  });
+});

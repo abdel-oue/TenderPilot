@@ -2,9 +2,9 @@
  * Analysis Repository
  * ALL analysis run, result and section SQL.
  */
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { analysisResults, analysisRuns, sectionEdits } from '../db/schema/index.js';
+import { analysisResults, analysisRuns, llmUsage, sectionEdits, tenders } from '../db/schema/index.js';
 
 export default class AnalysisRepository {
   /** @param {object} [database] injectable for tests */
@@ -47,6 +47,46 @@ export default class AnalysisRepository {
       .orderBy(desc(analysisRuns.startedAt))
       .limit(1);
     return row;
+  }
+
+  /**
+   * Every run this user owns, newest first - the Controle screen.
+   *
+   * analysis_runs carries no ownerId (it hangs off the tender), and llm_usage
+   * carries none either, so BOTH scopings happen here: the inner join to tenders
+   * is the ownership filter, and the token totals are a correlated subquery on
+   * run_id rather than a join, so a run with no LLM call still appears with 0.
+   *
+   * node_trace is not selected: a list of fifty runs does not need fifty full
+   * traces, only how many steps each one took. The trace is read per run by
+   * findRunById when a row is expanded.
+   *
+   * @param {string} ownerId
+   * @param {{ limit?: number }} [options]
+   * @returns {Promise<object[]>}
+   */
+  async listRunsForOwner(ownerId, { limit = 50 } = {}) {
+    return this.db
+      .select({
+        runId: analysisRuns.id,
+        tenderId: analysisRuns.tenderId,
+        reference: tenders.reference,
+        title: tenders.title,
+        status: analysisRuns.status,
+        graphVersion: analysisRuns.graphVersion,
+        startedAt: analysisRuns.startedAt,
+        finishedAt: analysisRuns.finishedAt,
+        error: analysisRuns.error,
+        awaiting: sql`(${analysisRuns.pendingQuestion} is not null)`,
+        steps: sql`jsonb_array_length(${analysisRuns.nodeTrace})::int`,
+        totalTokens: sql`(select coalesce(sum(u.total_tokens), 0)::int from ${llmUsage} u where u.run_id = ${analysisRuns.id})`,
+        calls: sql`(select count(*)::int from ${llmUsage} u where u.run_id = ${analysisRuns.id})`,
+      })
+      .from(analysisRuns)
+      .innerJoin(tenders, eq(tenders.id, analysisRuns.tenderId))
+      .where(eq(tenders.ownerId, ownerId))
+      .orderBy(desc(analysisRuns.startedAt))
+      .limit(limit);
   }
 
   /**
