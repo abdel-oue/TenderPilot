@@ -11,7 +11,10 @@ const envSchema = z.object({
   WEB_ORIGIN: z.url().default('http://localhost:4100'),
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 chars: openssl rand -hex 32'),
+  // min(1) only: Compose passes every key through, so an unset JWT_SECRET
+  // arrives as '' rather than absent, and an empty HMAC key must not boot.
+  // Length is the deployer's call - a public server wants `openssl rand -hex 32`.
+  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
   LOG_LEVEL: z.enum(['silent', 'fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   // --- MODEL ROUTING -------------------------------------------------------

@@ -71,7 +71,7 @@ restant marquées illisibles.
 
 ```bash
 git clone <repo> && cd tenderpilot
-cp .env.example .env               # remplir JWT_SECRET, LLM_*, AZURE_OPENAI_*
+cp .env.example .env               # seules les cles modele : LLM_*, AZURE_OPENAI_*
 cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
 npm run up                         # build + migrations + seed
 ```

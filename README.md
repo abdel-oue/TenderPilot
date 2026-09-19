@@ -21,7 +21,7 @@ Une machine avec Docker, rien d'autre : le corpus d'exemple est **dans le dépô
 
 ```bash
 git clone https://github.com/abdel-oue/TenderPilot.git && cd TenderPilot
-cp .env.example .env     # remplir LLM_*, AZURE_OPENAI_*, JWT_SECRET
+cp .env.example .env     # seules les cles modele restent a remplir : LLM_*, AZURE_OPENAI_*
 npm run up               # build + migrations + seed
 ```
 

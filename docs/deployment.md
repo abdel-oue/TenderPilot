@@ -12,7 +12,7 @@ Node 22 n'est nécessaire que pour développer hors conteneur.
 
 ```bash
 git clone <repo> && cd tenderpilot
-cp .env.example .env          # puis remplir les clés (voir plus bas)
+cp .env.example .env          # puis y coller les clés modèle
 cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
 npm run up                    # → web http://localhost:4100, api http://localhost:4000
 ```
@@ -55,24 +55,28 @@ docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot \
 
 ## Variables d'environnement
 
-Tout est dans `.env.example`. Les seules qu'il faut réellement remplir :
+`.env.example` est utilisable tel quel : ports, mot de passe Postgres et
+`JWT_SECRET` ont déjà une valeur qui marche. **Seules les clés modèle sont à
+remplir** — elles sont fournies par l'organisation et ne peuvent pas avoir de
+défaut.
 
-| Clé | Obligatoire | Note |
+| Clé | À remplir | Note |
 |---|---|---|
-| `JWT_SECRET` | oui | `openssl rand -hex 32` |
-| `LLM_URL` · `LLM_API_KEY` · `LLM_MODEL` | oui | tier raisonnement (gpt-5.5) |
-| `EMBEDDING_MODEL` · `EMBEDDING_DIMENSIONS` | oui | `embedder-small-3`, **512** |
-| `AZURE_OPENAI_*` | oui | tier volume (gpt-4.1) |
-| `TAVILY_API_KEY` | **non** | absente = l'outil `web_search` n'est pas proposé |
+| `LLM_URL` · `LLM_API_KEY` · `LLM_MODEL` | **oui** | tier raisonnement (gpt-5.5) |
+| `AZURE_OPENAI_API_KEY` · `AZURE_OPENAI_ENDPOINT` | **oui** | tier volume (gpt-4.1) |
+| `JWT_SECRET` | non en local | `tenderpilot123` par défaut, aucune longueur imposée ; **à régénérer sur un serveur public** (`openssl rand -hex 32`) |
+| `POSTGRES_PASSWORD` | non en local | `tenderpilot123` par défaut, le port n'écoute que sur `127.0.0.1` ; à changer sur un serveur |
+| `EMBEDDING_MODEL` · `EMBEDDING_DIMENSIONS` | non | `embedder-small-3`, **512** |
+| `TAVILY_API_KEY` | non | absente = l'outil `web_search` n'est pas proposé |
 | `STUB_LLM` | non | `1` = aucun appel fournisseur (tests, CI) |
 | `OCR_LANG` | non | packs tesseract joints par `+`, défaut `fra+eng` ; les deux sont dans l'image api |
-| `POSTGRES_PASSWORD` | oui | `tenderpilot` convient en local (port loopback) ; une vraie valeur sur le VPS |
 
 `EMBEDDING_DIMENSIONS` doit valoir 512 : la colonne `vector(512)` est figée dans la
 DDL, et un écart échoue à l'insertion.
 
-**Aucune clé n'est jamais commitée.** `.env` est gitignoré, `.env.example` ne
-contient que des valeurs vides. Une clé en clair dans le dépôt est éliminatoire.
+**Aucune clé fournisseur n'est jamais commitée.** `.env` est gitignoré ;
+`.env.example` ne contient que des valeurs de développement, jamais un secret
+réel. Une clé en clair dans le dépôt est éliminatoire.
 
 ## Les services
 
