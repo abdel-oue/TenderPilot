@@ -14,7 +14,7 @@ Tous les schémas de ce document existent aussi en Mermaid, copiables, dans
 ┌──────────┐      ┌──────────┐      ┌──────────┐
 │   web    │─────▶│   api    │─────▶│ postgres │
 │ Next.js  │ HTTP │ Fastify  │      │ + pgvector│
-│  :3100   │◀ ─ ─ │  :3000   │      │  :5432   │
+│  :4100   │◀ ─ ─ │  :4000   │      │  :5432   │
 └──────────┘ SSE  └────┬─────┘      └────▲─────┘
                        │ enqueue          │
                        │ subscribe        │

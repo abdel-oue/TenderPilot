@@ -13,7 +13,7 @@ service se répercute ici, comme pour [architecture.md](architecture.md).
 | [Cas d'usage](#1-cas-dusage) | qui fait quoi avec le produit |
 | [Services](#2-les-services-vue-conteneurs) | qui parle à qui, sur quel port |
 | [Couches api](#3-couches-côté-api) | où atterrit une requête |
-| [Graphe de l'agent](#4-le-graphe-de-lagent) | les nœuds et les deux arêtes conditionnelles |
+| [Graphe de l'agent](#4-le-graphe-de-lagent) | les nœuds et les trois arêtes conditionnelles |
 | [Séquence d'une analyse](#5-séquence--lancer-une-analyse) | ce qui est synchrone, ce qui ne l'est pas |
 | [Extraction d'un PDF](#6-extraction--décision-par-page) | couche texte, OCR, cache |
 | [Modèle de données](#7-modèle-de-données) | les tables et leurs liens |
@@ -66,8 +66,8 @@ flowchart LR
   user([Navigateur])
 
   subgraph compose["docker compose"]
-    web["<b>web</b><br/>Next.js · TS<br/>:3100"]
-    api["<b>api</b><br/>Fastify · JS ESM<br/>:3000"]
+    web["<b>web</b><br/>Next.js · TS<br/>:4100"]
+    api["<b>api</b><br/>Fastify · JS ESM<br/>:4000"]
     worker["<b>worker</b><br/>même image que l'api<br/>LangGraph"]
     pg[("<b>postgres</b> 16<br/>+ pgvector<br/>:5432")]
     redis[("<b>redis</b> 7<br/>BullMQ<br/>:6379")]
@@ -135,13 +135,15 @@ flowchart LR
   subgraph WR["Writer + Compliance"]
     direction TB
     draft["draft<br/><i>rédige, appelle des outils</i>"]
+    recon{"reconcileDecision<br/><i>rejoue decide sur<br/>l'état enrichi</i>"}
     comp{"compliance<br/><i>relit et refuse</i>"}
-    draft --> comp
+    draft --> recon --> comp
   end
 
   rubric --> match
   decide -->|no-go| STOP([FIN<br/>aucune rédaction])
   decide -->|go| draft
+  recon -->|"bascule en no-go"| STOP
   comp -->|"refus, max 2"| draft
   comp -->|validé| DONE([Dossier prêt])
 ```

@@ -27,6 +27,37 @@ session requise, rail flottant, menu mobile accessible et transitions respectant
 préférence de mouvement réduit. La connexion ouvre `/dashboard` ; l’inscription
 ouvre `/company`. Un changement de compte efface les requêtes du compte précédent.
 
+## L'espace de travail, écran par écran
+
+- **La barre du haut** est pleine largeur, d'un bord à l'autre, en trois zones :
+  fil d'Ariane, logo complet au centre — le nom entier, pas la seule icône —,
+  **Nouveau dossier** à droite.
+- **Le rail flottant**, à gauche sous la barre : des boutons en icône seule sur
+  `bg-surface`, centrés verticalement, le libellé au survol. Menu mobile au
+  clavier (tiroir avec les libellés), transitions à mouvement réduit.
+- **Le compte**, en bas du rail : un clic ouvre l'e-mail, le guide de démarrage,
+  le thème et la déconnexion. Il n'y a pas d'écran Paramètres, et le thème n'est
+  plus dans la barre du haut.
+- **Chaque liste longue** — dossiers, documents, références, équipe — porte les
+  mêmes deux contrôles : des filtres et un choix **normal / compact**, retenu par
+  liste d'une visite à l'autre dans le navigateur (`useDensity`).
+- **`/tenders/[id]`** ouvre sur le bouton **Analyser**, seul, au centre. Il devient
+  sur place le raisonnement de l'agent, puis se replie en une ligne quand le
+  verdict s'affiche. Les points bloquants, la matrice de conformité et le mémoire
+  technique sont trois panneaux latéraux qu'on ouvre pour vérifier.
+- **`/dashboard/controle`** est le seul endroit d'où une analyse précédente d'un
+  dossier reste atteignable.
+- **`/company`** : import du profil depuis un JSON, références filtrables par
+  secteur, équipe (CV-01…CV-n, avec poste, diplôme, expérience, certifications et
+  langues) filtrable par poste, documents filtrables par type.
+- **La vitrine** a sa propre barre : liens centrés, sélecteur de langue en icône
+  globe, et un seul bouton d'action, **Connexion**.
+
+Un compte = une entreprise. Créer un second utilisateur donne une application
+vide : ni profil, ni dossiers, ni documents. Rien n'est partagé, et il n'y a ni
+équipe ni invitation — l'authentification multi-utilisateurs est hors périmètre du
+cahier des charges.
+
 Les compteurs et échéances proviennent de `GET /tenders`, sans données fictives
 dans l’application. La liste propose recherche et filtres de statut. Les analyses
 actives déclenchent un rafraîchissement toutes les cinq secondes. Les états vides,
@@ -36,7 +67,7 @@ entreprise s’importe depuis un fichier JSON ; ses documents PDF restent sépar
 ## La session
 
 Le cookie de session est `httpOnly` et posé par l'api **sur une autre origine**
-(web `:3100` → api `:3000`). Un middleware Next ne peut donc pas le lire : la
+(web `:4100` → api `:4000`). Un middleware Next ne peut donc pas le lire : la
 vérification se fait côté client, contre `GET /auth/me`, d'où
 `components/auth/requireSession.tsx` plutôt qu'un middleware.
 
@@ -72,10 +103,12 @@ Deux transports, et le sondage est celui qui fait foi.
 reconnexion et à un réseau qui mange le SSE.
 
 `hooks/useRunStream.ts` ouvre en plus un `EventSource` sur
-`GET /tenders/:id/analysis/stream` tant que le run est vivant. Il n'apporte qu'une
-chose que le sondage ne peut pas donner : la ligne d'un outil **au moment où cet
-outil rend la main**, alors que la trace durable n'est écrite qu'à la fin du nœud —
-un nœud qui appelle six outils en vingt secondes se tait, puis dit tout d'un coup.
+`GET /tenders/:id/analysis/stream` tant que le run est vivant. Les étapes et outils
+apparaissent dès leur démarrage et sont mis à jour à leur fin, avec un identifiant
+stable et leur durée propre. Ces transitions sont aussi conservées dans la trace
+durable. L'ingestion distingue `document_cache`, `extract_text` et `ocr` : des pages
+issues d'un OCR précédent ne sont pas présentées comme une nouvelle opération OCR.
+Les dossiers `queued` affichent « En file d’attente » et aucun minuteur actif.
 
 C'est un miroir, jamais une source de vérité : pas de reconnexion à la main, pas de
 tampon, pas de surface d'erreur. Un flux coupé ramène l'écran à ce qu'il faisait

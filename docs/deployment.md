@@ -79,15 +79,15 @@ contient que des valeurs vides. Une clé en clair dans le dépôt est éliminato
 
 | Service | Port conteneur | Port hôte publié | Exposé |
 |---|---|---|---|
-| `web` | 3100 | `WEB_HOST_PORT` (déf. 4100) | 127.0.0.1 |
-| `api` | 3000 | `API_HOST_PORT` (déf. 4000) | 127.0.0.1 |
+| `web` | 4100 | `WEB_HOST_PORT` (déf. 4100) | 127.0.0.1 |
+| `api` | 4000 | `API_HOST_PORT` (déf. 4000) | 127.0.0.1 |
 | `worker` | — | — | non (pas de port) |
 | `postgres` | 5432 | `POSTGRES_HOST_PORT` (déf. 5433) | 127.0.0.1 |
 | `redis` | 6379 | — | non |
 
-**Le port conteneur ne bouge jamais** : l'api écoute 3000 et le web 3100 à
-l'intérieur, comme le veut la convention du dépôt. Seul le port hôte est une
-variable, et il est publié sur `127.0.0.1` uniquement : rien n'est joignable
+**Le même numéro des deux côtés** : l'api écoute 4000 et le web 4100 dans le
+conteneur comme sur l'hôte. Seul le port hôte est une variable, et il est publié
+sur `127.0.0.1` uniquement : rien n'est joignable
 depuis l'extérieur sans passer par le reverse proxy. Sur une machine partagée,
 vérifier avant de choisir :
 

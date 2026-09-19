@@ -184,7 +184,7 @@ même chose. D'où `npm run db:index`.
 
 ## 6. Le graphe : pages → verdict → mémoire
 
-Neuf nœuds. Le comportement est détaillé dans [agents.md](agents.md) ; ici, ce que
+Dix nœuds. Le comportement est détaillé dans [agents.md](agents.md) ; ici, ce que
 chacun transforme.
 
 | Nœud | Entrée | Sortie | Modèle |
@@ -197,6 +197,7 @@ chacun transforme.
 | `computeScore` | exigences + correspondances | couverture 0-100, projection sur la grille | — (pur) |
 | `decide` | score + correspondances | `go` / `no-go`, blockers, alertes | — (pur) |
 | `draft` | exigences groupées par catégorie | sections rédigées, avec outils | **raisonnement** |
+| `reconcileDecision` | l'état après rédaction | le verdict rejugé — même code que `decide` | — (pur) |
 | `compliance` | chaque section + ses citations | approuvée ou **refusée** avec instructions | volume |
 
 Pourquoi ces découpes :

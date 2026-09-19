@@ -11,9 +11,9 @@ Au dernier passage, le 19/09/2026 :
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Globale (api + web) | `npm test` | **330 tests passent, 0 échoue**, sur 33 fichiers |
+| Globale (api + web) | `npm test` | **390 tests passent, 0 échoue**, sur 42 fichiers |
 | Unitaires frontend | `npx vitest run --project web` | **22 tests passent**, sur 5 fichiers |
-| Navigateur, api interceptée | `npm run test:e2e` | **61 tests passent**, 1 ignoré sur desktop (il ne teste que le menu mobile) |
+| Navigateur, api interceptée | `npm run test:e2e` | 70 parcours déclarés (desktop + mobile), 1 ignoré sur desktop — il ne teste que le menu mobile |
 | Smoke, pile et modèle réels | `npm run test:e2e:smoke -w @tenderpilot/web` | hors suite par défaut, exige `npm run up` |
 
 Les 15 échecs d'une étape antérieure étaient des tests en retard sur le code, pas des
@@ -36,8 +36,8 @@ Ce qui a été ajouté en même temps :
 
 `npm run test:e2e` exécute les parcours de la vitrine, de l'espace de travail et
 d'une analyse (`landing.spec.ts`, `workspace.spec.ts`, `tenderAnalysis.spec.ts`),
-sur Chromium desktop et mobile. Le serveur Next démarre sur le port `3101` — ni le
-serveur de développement (`:3100`), ni la pile Docker (`:4100`) — et les appels API
+sur Chromium desktop et mobile. Le serveur Next démarre sur le port `4101` — ni le
+serveur de développement, ni la pile Docker, tous deux sur `:4100` — et les appels API
 sont interceptés par Playwright. Cette suite vérifie le frontend ; elle ne valide
 pas les services backend réels.
 
@@ -46,7 +46,7 @@ Les configurations ciblées, toutes dans `apps/web` :
 | Commande | Ce qu'elle lance |
 |---|---|
 | `npm run test:e2e:workspace -w @tenderpilot/web` | l'espace de travail seul |
-| `npm run test:e2e:landing -w @tenderpilot/web` | la vitrine seule (port `3100`) |
+| `npm run test:e2e:landing -w @tenderpilot/web` | la vitrine seule |
 | `npm run test:e2e:smoke -w @tenderpilot/web` | la vraie pile et le vrai modèle, hors suite par défaut |
 
 ---
@@ -58,7 +58,7 @@ Les configurations ciblées, toutes dans `apps/web` :
 | Outil | Pourquoi |
 |---|---|
 | Docker + Compose | la façon normale de tout lancer |
-| Node 22.11+ (`.nvmrc`) | développer ou tester hors conteneur |
+| Node 22.18+ (`.nvmrc`) | développer ou tester hors conteneur |
 | le corpus | `apps/api/src/db/seed/data/`, gitignoré, déposé à la main |
 | les clés modèle | `.env`, jamais commitées |
 
@@ -77,8 +77,8 @@ npm run up                         # build + migrations + seed
 ```
 
 → web `http://localhost:4100` · api `http://localhost:4000` ·
-compte `demo@tenderpilot.local` / `demo1234`. Les ports conteneur (web 3100, api
-3000) ne bougent pas ; seuls les ports hôte publiés sont des variables.
+compte `demo@tenderpilot.local` / `demo1234`. L'api écoute 4000 et le web 4100,
+dans le conteneur comme sur l'hôte ; seuls les ports hôte publiés sont des variables.
 
 ### Hors conteneur
 
@@ -95,9 +95,9 @@ npm run db:seed
 npm run db:index                   # plonge tout ce que le compte possède, corpus
                                    # d'entreprise et pièces de dossier ; sans ça
                                    # le rédacteur n'a rien à citer
-npm run dev:api                    # :3000   (node --watch, aucun build)
+npm run dev:api                    # :4000   (node --watch, aucun build)
 npm run dev:worker                 # le graphe tourne ici, pas dans l'api
-npm run dev:web                    # :3100
+npm run dev:web                    # :4100
 ```
 
 L'api lit `.env` via `node --env-file`, pas via `dotenv`. `lib/env.js` parse

@@ -6,7 +6,7 @@ endpoints, voir [api.md](api.md).
 
 ## Le graphe
 
-Neuf nœuds, deux arêtes conditionnelles. Le graphe est un `StateGraph` LangGraph
+Dix nœuds, trois arêtes conditionnelles. Le graphe est un `StateGraph` LangGraph
 (`apps/api/src/graph/index.js`) avec un checkpointer Postgres.
 
 Le diagramme vit dans [diagrams.md](diagrams.md#4-le-graphe-de-lagent) — une seule
@@ -15,12 +15,14 @@ copie, pour qu'un changement de nœud ne se répercute qu'à un endroit. En text
 ```
 ingest → extractRequirements → classifyRequirements → parseRubric
       → matchProfile → computeScore → decide ─[no-go]─→ FIN
-                                             └─[go]───→ draft → compliance
-                                                          ↑         │
-                                                          └──refus──┘  (max 2)
+                                             └─[go]───→ draft → reconcileDecision
+                                                                  ├─[no-go]→ FIN
+                                                                  └─[go]──→ compliance
+                                                          ↑                    │
+                                                          └───── refus ────────┘  (max 2)
 ```
 
-## Les deux arêtes conditionnelles
+## Les trois arêtes conditionnelles
 
 Ce sont elles qui font la différence entre un pipeline et un agent.
 
@@ -29,6 +31,17 @@ Ce sont elles qui font la différence entre un pipeline et un agent.
 Rédiger un mémoire technique pour un dossier dont l'entreprise est écartée est
 exactement le gaspillage que ce produit existe pour éviter. L'arête coupe avant
 le Writer : zéro token dépensé sur un dossier perdu.
+
+### `reconcileDecision` — le verdict est rejugé après la rédaction
+
+Rédiger fait apparaître ce que la qualification n'avait pas vu : une preuve que le
+Writer n'a pas trouvée, une section qu'il n'a pu remplir qu'avec
+`[A COMPLETER PAR L'HUMAIN]`. Le nœud rejoue donc `decide` sur l'état enrichi, et
+la même condition d'arête (`shouldDraft`) s'applique une seconde fois : un dossier
+qui bascule en no-go à ce moment-là s'arrête avant le Compliance.
+
+C'est le même code de décision, pas une seconde règle — il n'y a qu'un seul
+endroit où un verdict se calcule.
 
 ### `compliance` — une section refusée repart au Writer
 
