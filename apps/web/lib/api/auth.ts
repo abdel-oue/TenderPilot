@@ -18,6 +18,11 @@ export async function login(input: LoginInput): Promise<User> {
   return parseUser(await request("/auth/login", { body: input }));
 }
 
+/** Opens a throwaway workspace pre-filled with the sample dataset. No input. */
+export async function startDemo(): Promise<User> {
+  return parseUser(await request("/auth/demo", { method: "POST" }));
+}
+
 export async function logout(): Promise<void> {
   await request("/auth/logout", { method: "POST" });
 }

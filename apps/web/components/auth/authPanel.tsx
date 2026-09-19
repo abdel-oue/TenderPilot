@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Loader2, LockKeyhole } from "lucide-react";
-import { useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
+import { ArrowRight, Info, Loader2, LockKeyhole, PlayCircle } from "lucide-react";
+import { useDemo, useLogin, useLogout, useMe, useSignup } from "@/hooks/useAuth";
 import { AuthField } from "./authField";
 import { Reveal } from "@/components/ui/reveal";
 import { PRIMARY, SECONDARY } from "@/lib/utils/workspaceStyleUtils";
@@ -19,6 +19,7 @@ export function AuthPanel({ mode = "login" }: AuthPanelProps) {
   const login = useLogin();
   const signup = useSignup();
   const logout = useLogout();
+  const demo = useDemo();
   const mutation = mode === "login" ? login : signup;
   const isSignup = mode === "signup";
   function submit() {
@@ -51,6 +52,13 @@ export function AuthPanel({ mode = "login" }: AuthPanelProps) {
           {mutation.isError && <p className="rounded-xl bg-warning-soft p-3 text-sm text-warning" data-testid="auth-error" role="alert">{mutation.error.message}</p>}
           {me.isError && <div className="rounded-xl bg-warning-soft p-3 text-sm text-warning" role="alert" data-testid="auth-session-error">Connexion au service indisponible. <button className="cursor-pointer underline" onClick={() => void me.refetch()}>Réessayer</button></div>}
           <button className={`${PRIMARY} w-full`} onClick={submit} disabled={mutation.isPending} data-testid="auth-submit">{mutation.isPending && <Loader2 className="animate-spin" size={18} />}{mutation.isPending ? "Un instant…" : isSignup ? "Créer mon compte" : "Se connecter"}{!mutation.isPending && <ArrowRight size={18} />}</button>
+          {/* Nothing to fill in and nothing to lose: the visitor gets their OWN
+              copy of the sample workspace, not the shared seeded account. */}
+          {!isSignup && <div className="space-y-2 border-t border-border pt-5">
+            <button className={`${SECONDARY} w-full`} onClick={() => { if (!demo.isPending) demo.mutate(undefined, { onSuccess: () => router.replace("/dashboard") }); }} disabled={demo.isPending || mutation.isPending} data-testid="auth-demo">{demo.isPending ? <Loader2 className="animate-spin" size={16} /> : <PlayCircle size={16} />}{demo.isPending ? "Préparation de l’espace…" : "Essayer avec des données d’exemple"}</button>
+            <p className="flex items-start gap-2 text-xs leading-5 text-muted"><Info size={14} className="mt-0.5 shrink-0" />Crée un espace temporaire, pré-rempli avec le jeu de données d’exemple : profil, références, équipe et dix dossiers. Aucune inscription, supprimé après 24 h.</p>
+            {demo.isError && <p role="alert" data-testid="auth-demo-error" className="rounded-xl bg-warning-soft p-3 text-sm text-warning">{demo.error.message}</p>}
+          </div>}
         </div>
         <p className="text-center text-sm text-muted">{isSignup ? "Déjà un compte ? " : "Vous découvrez TenderPilot ? "}<Link className="font-semibold text-accent underline-offset-4 hover:underline" href={isSignup ? "/login" : "/signup"} data-testid={isSignup ? "auth-tab-login" : "auth-tab-signup"}>{isSignup ? "Se connecter" : "Créer un compte"}</Link></p>
         <p className="flex items-center justify-center gap-2 border-t border-border pt-6 text-xs text-muted"><LockKeyhole size={14} /> Un espace privé pour vos appels d’offres.</p>

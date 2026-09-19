@@ -22,6 +22,14 @@ export default async function authRoutes(app) {
     return reply.send({ user });
   });
 
+  // No body, so no validator. The session cookie is the only thing this returns
+  // that matters - the temporary account's password is a random uuid nobody sees.
+  app.post('/demo', async (_request, reply) => {
+    const { user, token } = await authService.startDemo();
+    setSessionCookie(reply, token);
+    return reply.code(201).send({ user });
+  });
+
   app.post('/logout', async (_request, reply) => {
     clearSessionCookie(reply);
     return reply.code(204).send();
