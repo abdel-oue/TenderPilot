@@ -22,6 +22,7 @@ export const NODE_PHRASES: Record<string, string> = {
   computeScore: "Calcul du score projeté…",
   decide: "Décision go / no-go…",
   draft: "Rédaction du mémoire technique…",
+  reconcileDecision: "Vérification de la décision après rédaction…",
   compliance: "Relecture des sections rédigées…",
 };
 
@@ -46,6 +47,8 @@ export function nodePhrase(node: string): string {
  * @returns the running node's name, or null once the graph is past the list
  */
 export function currentNode(trace: TraceEntry[]): string | null {
+  const active = trace.findLast((entry) => entry.status === "running");
+  if (active) return active.node;
   const done = trace.filter((entry) => entry.status !== "human").map((entry) => entry.node);
   if (done.length === 0) return NODE_ORDER[0];
   // The redraft loop revisits draft and compliance, so the last row is a better
@@ -62,10 +65,11 @@ export function currentNode(trace: TraceEntry[]): string | null {
  * @returns e.g. "2 min 14 s", or "" when nothing has a duration
  */
 export function totalDuration(trace: TraceEntry[]): string {
-  const ms = trace.reduce((sum, entry) => sum + (entry.ms ?? 0), 0);
+  const ms = trace.reduce((sum, entry) => sum + (entry.status === "running" ? 0 : entry.ms ?? 0), 0);
   if (ms === 0) return "";
   if (ms < 60_000) return `${(ms / 1000).toFixed(0)} s`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
+  const roundedSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const seconds = roundedSeconds % 60;
   return `${minutes} min ${String(seconds).padStart(2, "0")} s`;
 }

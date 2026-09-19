@@ -15,6 +15,7 @@ const GRAPH_NODES = [
   "computeScore",
   "decide",
   "draft",
+  "reconcileDecision",
   "compliance",
 ];
 
@@ -50,7 +51,7 @@ describe("currentNode", () => {
     // finished rows would claim the run is somewhere it has already been past.
     const trace = [entry("draft"), entry("compliance")];
     expect(currentNode(trace)).toBe(null);
-    expect(currentNode([...trace, entry("draft")])).toBe("compliance");
+    expect(currentNode([...trace, entry("draft")])).toBe("reconcileDecision");
   });
 
   it("ignores the human's own answers when working out where the agent is", () => {

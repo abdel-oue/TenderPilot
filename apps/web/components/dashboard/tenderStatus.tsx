@@ -12,6 +12,8 @@ const STATUS = {
 interface TenderStatusProps { tender: TenderListItem }
 export function TenderStatus({ tender }: TenderStatusProps) {
   const state = tenderState(tender);
-  const status = STATUS[state];
+  const status = tender.analysis?.status === "queued"
+    ? { label: "En file d’attente", icon: Circle, className: "bg-soft text-muted" }
+    : STATUS[state];
   return <span className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium", status.className)}><status.icon size={12} className={cn(state === "active" && "animate-spin")} />{status.label}</span>;
 }

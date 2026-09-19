@@ -31,6 +31,14 @@ export default function SectionEditor({ tenderId, runId, section }: SectionEdito
         ) : null}
       </div>
 
+      {section.validatedByHuman ? <p data-testid="section-validated" className="mt-2 text-xs text-accent">Validée par un humain</p> : null}
+      {section.needsHuman ? (
+        <div data-testid="section-warnings" role="status" className="mt-3 rounded border border-border bg-warning-soft p-3 text-sm">
+          <p>À compléter ou à valider par un humain.</p>
+          {(section.complianceWarnings ?? []).map((warning, index) => <p key={index}>{warning}</p>)}
+        </div>
+      ) : null}
+
       {open ? (
         <textarea
           data-testid="section-textarea"
@@ -46,10 +54,15 @@ export default function SectionEditor({ tenderId, runId, section }: SectionEdito
         <Button data-testid="section-toggle" onClick={() => setOpen(!open)}>
           {open ? "Fermer" : "Corriger"}
         </Button>
+        <Button data-testid="section-validate" disabled={save.isPending || dirty || section.validatedByHuman}
+          onClick={() => save.mutate({ sectionKey: section.sectionKey, title: section.title, content, validatedByHuman: true })}>
+          Valider cette section
+        </Button>
         {open ? (
           <Button
             data-testid="section-save"
             variant="primary"
+            disabled={save.isPending}
             onClick={() =>
               save.mutate({ sectionKey: section.sectionKey, title: section.title, content })
             }

@@ -40,10 +40,12 @@ export const LIVE_STATUSES: AnalysisStatus[] = ["queued", "running", "awaiting_h
 
 /** One line of the agent activity feed. This is the "profondeur agentique" view. */
 export interface TraceEntry {
+  id?: string;
+  startedAt?: string;
   node: string;
   at: string;
   summary: string;
-  status: "ok" | "error" | "retry" | "human";
+  status: "ok" | "error" | "retry" | "human" | "running" | "paused";
   ms?: number;
   /** Tools the agent chose to call on this step, in order. */
   tools?: ToolNarration[];
@@ -86,13 +88,18 @@ export interface HumanAnswer {
  * the poll could not also tell us, so a dead stream costs latency and nothing else.
  */
 export type RunEvent =
-  | { type: "node"; node: string; status: TraceEntry["status"]; summary: string; ms?: number; at: string }
-  | { type: "tool"; node: string; name: string; raison: string | null; outcome: string; ms?: number; at: string }
+  | ({ type: "node" } & TraceEntry)
+  | ({ type: "tool"; node: string; at: string } & ToolNarration)
   | { type: "ask"; question: PendingQuestion }
   | { type: "status"; status: AnalysisStatus };
 
 /** One tool call, written for the person reading the screen. */
 export interface ToolNarration {
+  id?: string;
+  startedAt?: string;
+  at?: string;
+  status?: "running" | "ok" | "error" | "paused";
+  ms?: number;
   /** The raw tool name. Secondary: evidence for a technical reader. */
   name: string;
   /** The model's own reason for calling it. Null if it did not give one. */
@@ -107,9 +114,14 @@ export interface AnalysisSection {
   title: string;
   content: string;
   editedByHuman: boolean;
+  validatedByHuman?: boolean;
+  needsHuman?: boolean;
+  complianceWarnings?: string[];
 }
 
 export interface AnalysisResult {
+  needsHuman?: boolean;
+  stageErrors?: { node: string; message: string }[];
   verdict: "go" | "no-go";
   confidence: number;
   justification: string;

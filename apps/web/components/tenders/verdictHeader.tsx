@@ -20,6 +20,13 @@ export default function VerdictHeader({ tenderId, reference, analysis }: Verdict
   // Nothing is drafted for a no-go, so there is nothing to export either.
   const exportable = analysis && analysis.sections.length > 0;
 
+  const analyzeLabel = (() => {
+    if (analysis?.status === "queued") return "En file d’attente";
+    if (running) return "Analyse en cours…";
+    if (start.isPending) return "Lancement…";
+    return "Analyser";
+  })();
+
   return (
     <header className="space-y-4 rounded-md border border-border bg-surface p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -35,7 +42,7 @@ export default function VerdictHeader({ tenderId, reference, analysis }: Verdict
             disabled={running || start.isPending}
             onClick={() => start.mutate()}
           >
-            {running ? "Analyse en cours…" : start.isPending ? "Lancement…" : "Analyser"}
+            {analyzeLabel}
           </Button>
           {exportable ? (
             <Button data-testid="export-docx" href={exportDocxUrl(analysis.runId)}>

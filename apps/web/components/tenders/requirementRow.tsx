@@ -33,6 +33,7 @@ export default function RequirementRow({ requirement }: RequirementRowProps) {
         {requirement.quote ? (
           <p className="mt-1 text-tiny italic text-muted">« {requirement.quote} »</p>
         ) : null}
+        {requirement.quoteVerified === false ? <p data-testid="citation-unverified" className="mt-1 text-xs text-no-go">Citation non vérifiée sur la page indiquée — contrôle humain requis.</p> : null}
       </td>
       <td className="px-3 py-3">
         <span className={cn("inline-block rounded border px-2 py-0.5 text-mini uppercase", OBLIGATION_STYLE[requirement.obligation])}>
@@ -44,7 +45,7 @@ export default function RequirementRow({ requirement }: RequirementRowProps) {
         {/* EX-03: one click to the exact page of the original PDF. The column is
             ON DELETE SET NULL, so a requirement whose source document is gone
             shows the citation as plain text rather than a link to nowhere. */}
-        {requirement.sourceDocumentId ? (
+        {requirement.sourceDocumentId && requirement.quoteVerified !== false ? (
           <a
             data-testid="requirement-citation"
             className="cursor-pointer underline underline-offset-2"

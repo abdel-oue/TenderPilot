@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { answerQuestion, fetchAnalysis, saveSection, startAnalysis } from "@/lib/api/analysis";
+import { answerQuestion, fetchAnalysis, reviewDecision, saveSection, startAnalysis } from "@/lib/api/analysis";
 import { tenderKeys } from "@/lib/keys/tenderKeys";
 import { LIVE_STATUSES, type HumanAnswer } from "@/lib/types";
 
@@ -56,8 +56,16 @@ export function useSaveSection(tenderId: string, runId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { sectionKey: string; title: string; content: string }) =>
+    mutationFn: (input: { sectionKey: string; title: string; content: string; validatedByHuman?: boolean }) =>
       saveSection(runId, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tenderKeys.analysis(tenderId) }),
+  });
+}
+
+export function useReviewDecision(tenderId: string, runId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof reviewDecision>[1]) => reviewDecision(runId, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: tenderKeys.analysis(tenderId) }),
   });
 }

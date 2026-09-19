@@ -8,10 +8,11 @@
 // survives a refresh, and the live tool events from the stream, which are what
 // make a twenty-second node something other than a spinner.
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
-import type { RunEvent, TraceEntry } from "@/lib/types";
+import type { RunEvent, TraceEntry, ToolNarration } from "@/lib/types";
 import { formatDateTime, formatDuration } from "@/lib/utils/formatUtils";
-import { currentNode, nodePhrase } from "@/lib/utils/traceUtils";
+import { nodePhrase } from "@/lib/utils/traceUtils";
 import { fadeUp, stagger } from "@/lib/utils/motionUtils";
 import { cn } from "@/lib/utils/classNameUtils";
 
@@ -27,7 +28,24 @@ interface ThinkingFeedProps {
 }
 
 /** One tool call, whichever source it came from. */
-function ToolRow({ name, raison, outcome, ms }: { name: string; raison: string | null; outcome: string; ms?: number }) {
+function Elapsed({ startedAt }: { startedAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{formatDuration(Math.max(0, now - Date.parse(startedAt)))}</>;
+}
+
+/** The trailing " · 3s" / " · 12.4s" duration badge, live while the row is still running. */
+function ElapsedOrDuration({ ticking, running, startedAt, ms }: { ticking: boolean; running: boolean; startedAt?: string; ms?: number }) {
+  if (ticking && running && startedAt) {
+    return <> · <Elapsed startedAt={startedAt} /></>;
+  }
+  return <>{ms === undefined ? "" : ` · ${formatDuration(ms)}`}</>;
+}
+
+function ToolRow({ name, raison, outcome, ms, status, startedAt, ticking }: ToolNarration & { ticking: boolean }) {
   return (
     <div className="flex items-start gap-3 py-1" data-testid="trace-tool">
       <div className="min-w-0 flex-1">
@@ -35,7 +53,7 @@ function ToolRow({ name, raison, outcome, ms }: { name: string; raison: string |
         {raison ? <p className="text-xs leading-5">« {raison} »</p> : null}
         {/* Built from the real result by lib/narration.js, never from the model:
             an empty search says so here whatever the model claimed. */}
-        <p className="mt-0.5 text-mini leading-5 text-muted">{outcome}</p>
+        <p className="mt-0.5 text-mini leading-5 text-muted">{status === "running" && !ticking ? "Appel suspendu ou interrompu" : outcome}</p>
       </div>
       {/* Secondary on purpose: the dirigeant ignores it, a technical reader
           wants to see that a real named tool ran. */}
@@ -44,20 +62,32 @@ function ToolRow({ name, raison, outcome, ms }: { name: string; raison: string |
         className="shrink-0 pt-0.5 font-mono text-mini text-muted/60"
       >
         {name}
-        {ms === undefined ? "" : ` · ${formatDuration(ms)}`}
+        <ElapsedOrDuration ticking={ticking} running={status === "running"} startedAt={startedAt} ms={ms} />
       </span>
     </div>
   );
 }
 
+/** What a trace row's main line should say, given its status and whether it's the active row. */
+function entrySummary(entry: TraceEntry, isActive: boolean): string {
+  if (entry.status === "human") return `Vous : ${entry.choiceLabel ?? entry.choice}`;
+  if (entry.status === "running") return isActive ? nodePhrase(entry.node) : "Étape suspendue ou interrompue";
+  return entry.summary;
+}
+
 export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: ThinkingFeedProps) {
   const reduced = useReducedMotion();
-  const node = running ? currentNode(trace) : null;
+  const active = running ? trace.findLast((entry) => entry.status === "running") : undefined;
 
   // Tools already written into a node's trace row are the same calls the stream
   // announced. Once the row lands, it wins: it is the durable copy.
-  const settled = new Set(trace.flatMap((entry) => (entry.tools ?? []).map((t) => t.name + "|" + t.outcome)));
-  const pendingTools = liveTools.filter((tool) => !settled.has(tool.name + "|" + tool.outcome));
+  const settled = new Set(trace.flatMap((entry) => (entry.tools ?? []).map((t) => t.id ?? t.name + "|" + t.outcome)));
+  const pendingTools = liveTools.filter((tool) => !settled.has(tool.id ?? tool.name + "|" + tool.outcome));
+  const latestTool = (tool: ToolNarration) => {
+    const live = tool.id ? liveTools.find((item) => item.id === tool.id) : undefined;
+    if (tool.status && tool.status !== "running" && live?.status === "running") return tool;
+    return live && (live.at >= (tool.at ?? "")) ? live : tool;
+  };
 
   return (
     <div data-testid="trace-panel">
@@ -83,7 +113,7 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
           >
             {trace.map((entry, index) => (
               <motion.li
-                key={`${entry.node}-${entry.at}-${index}`}
+                key={entry.id ?? `${entry.node}-${entry.at}-${index}`}
                 variants={fadeUp(reduced, 8)}
                 data-testid="trace-entry"
                 className={cn(
@@ -102,13 +132,13 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
                       entry.status === "human" && "font-medium text-accent",
                     )}
                   >
-                    {entry.status === "human" ? `Vous : ${entry.choiceLabel ?? entry.choice}` : entry.summary}
+                    {entrySummary(entry, entry === active)}
                   </p>
                   {/* Name on the right and small: the node is how it happened,
                       the summary above is what happened. */}
                   <span className="shrink-0 font-mono text-mini text-muted/60">
                     {entry.node}
-                    {entry.ms === undefined ? "" : ` · ${formatDuration(entry.ms)}`}
+                    <ElapsedOrDuration ticking={entry === active} running={entry === active} startedAt={entry.startedAt} ms={entry.ms} />
                   </span>
                 </div>
 
@@ -124,7 +154,7 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
                     className="mt-1.5 space-y-1 border-l border-border pl-3 md:ml-[4.75rem]"
                   >
                     {entry.tools.map((tool, position) => (
-                      <ToolRow key={`${tool.name}-${position}`} {...tool} />
+                      <ToolRow key={tool.id ?? `${tool.name}-${position}`} {...latestTool(tool)} ticking={entry === active} />
                     ))}
                   </div>
                 ) : null}
@@ -133,7 +163,7 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
 
             {/* The node in flight: its tools as they return, then the phrase for
                 what it is doing while it has nothing to show yet. */}
-            {running && (
+            {((running && !active) || pendingTools.length > 0) && (
               <motion.li
                 variants={fadeUp(reduced, 8)}
                 data-testid="trace-current"
@@ -142,11 +172,8 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
                 <div className="flex items-baseline gap-3">
                   <span className="w-16 shrink-0" aria-hidden="true" />
                   <p className="min-w-0 flex-1 animate-pulse text-xs text-muted">
-                    {node ? nodePhrase(node) : "Finalisation…"}
+                    {running && !active ? "Préparation de l’étape suivante…" : "Activité des outils"}
                   </p>
-                  {node ? (
-                    <span className="shrink-0 font-mono text-mini text-muted/60">{node}</span>
-                  ) : null}
                 </div>
                 <AnimatePresence initial={false}>
                   {pendingTools.length > 0 && (
@@ -158,7 +185,7 @@ export function ThinkingFeed({ trace, liveTools, running, expanded, onToggle }: 
                     >
                       {pendingTools.map((tool, index) => (
                         <motion.div key={`${tool.name}-${tool.at}-${index}`} variants={fadeUp(reduced, 6)}>
-                          <ToolRow {...tool} />
+                          <ToolRow {...tool} ticking={running} />
                         </motion.div>
                       ))}
                     </motion.div>

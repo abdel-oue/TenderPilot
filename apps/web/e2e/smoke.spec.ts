@@ -24,7 +24,7 @@ test("@smoke analyses a seeded dossier end to end with the real model", async ({
 
   await page.getByTestId("analyze-button").click();
   // The graph runs in the worker; the screen polls. No waitForTimeout.
-  await expect(page.getByTestId("analysis-status")).toHaveText("done");
+  await expect(page.getByTestId("analysis-status")).toHaveText("Analyse terminée");
 
   // A verdict, with a justification the agent wrote — whatever it says.
   await expect(page.getByTestId("verdict-badge")).toHaveText(/go|no-go/i);

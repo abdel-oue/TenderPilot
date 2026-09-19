@@ -25,7 +25,7 @@ export async function startAnalysis(tenderId: string) {
 /** EX-06: the human correction, kept and reused by later sections. */
 export async function saveSection(
   runId: string,
-  input: { sectionKey: string; title: string; content: string },
+  input: { sectionKey: string; title: string; content: string; validatedByHuman?: boolean },
 ) {
   return await request(`/analyses/${runId}/sections`, { method: "PATCH", body: input });
 }
@@ -39,6 +39,10 @@ export async function answerQuestion(runId: string, answer: HumanAnswer) {
     runId: string;
     status: string;
   };
+}
+
+export async function reviewDecision(runId: string, input: { verdictOverride: "go" | "no-go"; instruction: string; dismissedBlockers: string[] }) {
+  return request(`/analyses/${runId}/decision`, { body: input });
 }
 
 /**

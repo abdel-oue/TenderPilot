@@ -92,7 +92,7 @@ export const COMPANY_DOCUMENTS = [
   { id: "d10", kind: "attestation", originalName: "attestation-fiscale.pdf", pageCount: 2, extractionPath: "text" },
   { id: "d11", kind: "memoire", originalName: "memoire-technique-2025.pdf", pageCount: 18, extractionPath: "text" },
 ];
-interface MockOptions { runs?: typeof RUNS; demoFailure?: boolean; signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean; company?: boolean }
+interface MockOptions { runs?: typeof RUNS; demoFailure?: boolean; signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: (typeof REQUIREMENTS[number] & { quoteVerified?: boolean })[]; saveFailure?: boolean; company?: boolean }
 export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
   const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, runs: options.runs ?? RUNS, demoFailure: options.demoFailure ?? false, posts: [] as string[], patches: [] as unknown[], answers: [] as unknown[] };
   // The Next dev overlay button sits in the bottom-left corner, on top of the rail's
@@ -157,7 +157,16 @@ export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
     if (path.endsWith("/sections") && method === "PATCH") {
       if (state.saveFailure) return send({ error: "Enregistrement impossible.", code: "SAVE_FAILED" }, 503);
       state.patches.push(route.request().postDataJSON());
-      return send({ id: "s1", sectionKey: "methodologie", title: "Méthodologie", content: "", editedByHuman: true });
+      const patch = route.request().postDataJSON();
+      const envelope = state.analysis as typeof ANALYSIS | null;
+      if (envelope) {
+        state.analysis = { ...envelope, sections: envelope.sections.map((section) => section.sectionKey === patch.sectionKey ? {
+          ...section, ...patch, editedByHuman: true, validatedByHuman: patch.validatedByHuman === true,
+          needsHuman: patch.validatedByHuman !== true,
+          complianceWarnings: patch.validatedByHuman ? [] : (section as { complianceWarnings?: string[] }).complianceWarnings ?? [],
+        } : section) };
+      }
+      return send({ id: "s1", ...patch, editedByHuman: true });
     }
     if (path.startsWith("/tenders/")) {
       const tender = TENDERS.find((entry) => entry.id === path.split("/")[2]);

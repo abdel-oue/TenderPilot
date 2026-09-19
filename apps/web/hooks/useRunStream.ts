@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { runStreamUrl } from "@/lib/api/analysis";
 import { tenderKeys } from "@/lib/keys/tenderKeys";
-import { LIVE_STATUSES, type AnalysisStatus, type RunEvent } from "@/lib/types";
+import { LIVE_STATUSES, type AnalysisStatus, type RunEvent, type AnalysisEnvelope } from "@/lib/types";
 
 /**
  * The live half of the analysis screen.
@@ -15,9 +15,8 @@ import { LIVE_STATUSES, type AnalysisStatus, type RunEvent } from "@/lib/types";
  * no error surface: EventSource retries on its own, and if it never comes back
  * the screen is exactly what it was before any of this existed.
  *
- * The one thing it does that the poll cannot: a tool row the moment that tool
- * returns. The durable trace is written per NODE, so a node calling six tools
- * over twenty seconds is silent and then says everything at once.
+ * Tool transitions are also persisted inside the active node. SSE delivers them
+ * immediately; polling restores them after a refresh or a dropped connection.
  *
  * @param tenderId the dossier being watched
  * @param runId the current run; a new one empties the buffer
@@ -56,8 +55,25 @@ export function useRunStream(
       }
 
       if (event.type === "tool") {
-        setLiveTools((tools) => [...tools, event]);
+        setLiveTools((tools) => {
+          const index = event.id ? tools.findIndex((tool) => tool.id === event.id) : -1;
+          if (index < 0) return [...tools, event];
+          return tools.map((tool, position) => position === index ? event : tool);
+        });
         return;
+      }
+      if (event.type === "node" && event.id) {
+        queryClient.setQueryData<AnalysisEnvelope | null>(tenderKeys.analysis(tenderId), (envelope) => {
+          if (!envelope || envelope.runId !== runId) return envelope;
+          const index = envelope.nodeTrace.findIndex((entry) => entry.id === event.id);
+          const nodeTrace =
+            index < 0
+              ? [...envelope.nodeTrace, event]
+              : envelope.nodeTrace.map((entry, position) =>
+                  position === index ? { ...entry, ...event } : entry,
+                );
+          return { ...envelope, nodeTrace };
+        });
       }
       // A node finished, the status moved, or a question was asked. All three
       // change what the envelope says, and the envelope is the poll's business:

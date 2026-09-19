@@ -22,6 +22,15 @@ import { PRIMARY, SECONDARY } from "@/lib/utils/workspaceStyleUtils";
 import { cn } from "@/lib/utils/classNameUtils";
 import { ThinkingFeed } from "./thinkingFeed";
 import { HumanQuestion } from "./humanQuestion";
+import { DecisionReview } from "./decisionReview";
+
+const STATUS_LABELS: Record<string, string> = {
+  queued: "En file d’attente",
+  running: "Analyse en cours",
+  awaiting_human: "En attente de votre réponse",
+  done: "Analyse terminée",
+  failed: "Analyse échouée",
+};
 
 interface AnalysisStageProps {
   reference: string;
@@ -48,7 +57,8 @@ export function AnalysisStage({
 }: AnalysisStageProps) {
   const reduced = useReducedMotion();
   const status = analysis?.status;
-  const running = status === "queued" || status === "running";
+  const queued = status === "queued";
+  const running = status === "running";
   const waiting = status === "awaiting_human";
   const result = analysis?.result ?? null;
   const trace = analysis?.nodeTrace ?? [];
@@ -57,7 +67,7 @@ export function AnalysisStage({
   // two in the DOM at once is a strict-mode failure in the browser tests and an
   // ambiguous screen for everyone else.
   const phase =
-    running || waiting ? "working" : status === "failed" ? "failed" : result ? "done" : "idle";
+    queued || running || waiting ? "working" : status === "failed" ? "failed" : result ? "done" : "idle";
 
   // Open by default while the agent works, closed once it is done — but the
   // reader's own toggle wins until the phase changes under them. Reset during
@@ -77,7 +87,7 @@ export function AnalysisStage({
       <div className="flex flex-col items-center gap-2">
         <h1 className="font-heading text-3xl tracking-tight">{reference}</h1>
         <span data-testid="analysis-status" className="text-mini uppercase tracking-label text-muted">
-          {status ?? "aucune analyse"}
+          {status ? STATUS_LABELS[status] : "aucune analyse"}
         </span>
       </div>
 
@@ -116,6 +126,7 @@ export function AnalysisStage({
             exit="exit"
             className="w-full max-w-3xl space-y-4"
           >
+            {queued ? <p role="status" data-testid="analysis-queued" className="text-sm text-muted">Ce dossier est en file d’attente. L’analyse démarrera dès qu’un agent sera disponible.</p> : null}
             {waiting && analysis?.pendingQuestion ? (
               <HumanQuestion
                 question={analysis.pendingQuestion}
@@ -158,6 +169,12 @@ export function AnalysisStage({
                 <p data-testid="verdict-justification" className="mx-auto max-w-2xl text-sm leading-6">
                   {result.justification}
                 </p>
+                {result.needsHuman ? (
+                  <div data-testid="analysis-warnings" role="status" className="rounded border border-border bg-warning-soft p-3 text-left text-sm">
+                    <p>Vérification humaine requise avant utilisation du dossier.</p>
+                    {(result.stageErrors ?? []).map((error, index) => <p key={index}>{error.message}</p>)}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -172,6 +189,8 @@ export function AnalysisStage({
                 </a>
               ) : null}
             </div>
+
+            {analysis ? <DecisionReview tenderId={analysis.tenderId} runId={analysis.runId} blockers={blockers} /> : null}
 
             <ThinkingFeed
               trace={trace}
