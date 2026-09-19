@@ -175,3 +175,54 @@ test("keeps authentication usable at 320px and honors reduced motion", async ({ 
   await expect(page.getByTestId("auth-name")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("opens a demo workspace from the login screen without signing up", async ({ page }) => {
+  const state = await mockWorkspaceApi(page, { signedIn: false, demoFailure: true });
+  await page.goto("/login");
+  // The affordance says what it does before it is clicked: a temporary account.
+  await expect(page.getByTestId("auth-demo")).toContainText("données d’exemple");
+  await page.getByTestId("auth-demo").click();
+  await expect(page.getByTestId("auth-demo-error")).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+
+  state.demoFailure = false;
+  await page.getByTestId("auth-demo").click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(state.posts).toContain("/auth/demo");
+});
+
+test("lists the team and filters it by poste", async ({ page }) => {
+  await mockWorkspaceApi(page, { company: true });
+  await page.goto("/company");
+  const rows = page.getByTestId("company-team").getByRole("row");
+  // Two profiles plus the header row.
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(1)).toContainText("CV-01");
+  await expect(rows.nth(1)).toContainText("Directrice de projet");
+  await expect(rows.nth(1)).toContainText("14 ans");
+  await page.getByTestId("team-filter-Conducteur de travaux").click();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText("CV-02");
+});
+
+test("shows every run on Contrôle with its reasoning and its tokens", async ({ page }) => {
+  await mockWorkspaceApi(page);
+  await page.goto("/dashboard/controle");
+  const runs = page.getByTestId("runs-table").getByTestId("run-row");
+  await expect(runs).toHaveCount(2);
+  await expect(runs.first()).toContainText("AO-2026-002");
+  await expect(runs.first()).toContainText("4 étapes");
+  // The detail is fetched only once the row is opened.
+  await expect(page.getByTestId("run-detail")).toHaveCount(0);
+  await runs.first().click();
+  await expect(page.getByTestId("run-trace-entry").first()).toContainText("4 pages lues");
+  await expect(page.getByTestId("run-trace-tool").first()).toContainText("search_documents");
+  await expect(page.getByTestId("run-usage-row")).toHaveCount(2);
+  await expect(page.getByTestId("run-usage-row").first()).toContainText("extractor");
+});
+
+test("says so plainly when no analysis has ever been launched", async ({ page }) => {
+  await mockWorkspaceApi(page, { runs: [] });
+  await page.goto("/dashboard/controle");
+  await expect(page.getByTestId("runs-empty")).toBeVisible();
+});

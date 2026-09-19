@@ -64,15 +64,37 @@ export const COMPANY = {
     { id: "REF-01", client: "ONCF", secteur: "Ferroviaire", objet: "Maintenance des voies sur la ligne Casablanca-Rabat" },
     { id: "REF-02", client: "OCP", secteur: "Industrie", objet: "Genie civil sur le site de Khouribga" },
   ],
-  team: [{ id: "CV-01", initiales: "S.B.", poste: "Directrice de projet", anneesExperience: 14 }],
+  team: [
+    { id: "CV-01", initiales: "S.B.", poste: "Directrice de projet", anneesExperience: 14, diplome: "Ingenieure EMI", certifications: ["PMP"], langues: ["FR", "EN"] },
+    { id: "CV-02", initiales: "Y.T.", poste: "Conducteur de travaux", anneesExperience: 9, diplome: "EHTP", certifications: [], langues: ["FR", "AR"] },
+  ],
+};
+// The Controle screen: one finished run and one that failed, so the list has a
+// status to distinguish and the detail has both a trace and a token table.
+export const RUNS = [
+  { runId: "r2", tenderId: "t2", reference: "AO-2026-002", title: "Audit des systemes d'information", status: "done", graphVersion: "v1", startedAt: "2026-09-12T09:00:00.000Z", finishedAt: "2026-09-12T09:01:09.000Z", durationMs: 69_000, error: null, awaiting: false, steps: 4, totalTokens: 38_210, calls: 9 },
+  { runId: "r5", tenderId: "t1", reference: "AO-2026-001", title: null, status: "failed", graphVersion: "v1", startedAt: "2026-09-11T08:00:00.000Z", finishedAt: "2026-09-11T08:00:12.000Z", durationMs: 12_000, error: "Le modele n a pas repondu.", awaiting: false, steps: 1, totalTokens: 1_240, calls: 1 },
+];
+export const RUN_DETAIL = {
+  ...RUNS[0],
+  nodeTrace: [
+    ...ANALYSIS.nodeTrace,
+    { node: "matchProfile", at: "2026-09-12T09:00:48.000Z", summary: "Recherche dans le corpus", status: "ok", ms: 900, tools: [{ name: "search_documents", raison: "Verifier la certification", outcome: "2 passages trouves" }] },
+  ],
+  pendingQuestion: null,
+  usage: [
+    { operation: "extractor", tier: "volume", model: "gpt-4.1", calls: 4, promptTokens: 18_000, completionTokens: 4_200, totalTokens: 22_200, avgLatencyMs: 3_100, errors: 0 },
+    { operation: "matcher", tier: "reasoning", model: "gpt-5.5", calls: 3, promptTokens: 12_010, completionTokens: 4_000, totalTokens: 16_010, avgLatencyMs: 5_400, errors: 1 },
+  ],
+  result: ANALYSIS.result,
 };
 export const COMPANY_DOCUMENTS = [
   { id: "d10", kind: "attestation", originalName: "attestation-fiscale.pdf", pageCount: 2, extractionPath: "text" },
   { id: "d11", kind: "memoire", originalName: "memoire-technique-2025.pdf", pageCount: 18, extractionPath: "text" },
 ];
-interface MockOptions { signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean; company?: boolean }
+interface MockOptions { runs?: typeof RUNS; demoFailure?: boolean; signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean; company?: boolean }
 export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
-  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, posts: [] as string[], patches: [] as unknown[], answers: [] as unknown[] };
+  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, runs: options.runs ?? RUNS, demoFailure: options.demoFailure ?? false, posts: [] as string[], patches: [] as unknown[], answers: [] as unknown[] };
   // The Next dev overlay button sits in the bottom-left corner, on top of the rail's
   // account control. It only exists under `next dev`, so hide it for the whole run.
   await page.addInitScript(() => {
@@ -92,6 +114,14 @@ export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
       state.signedIn = true;
       return send({ user: USER });
     }
+    if (path === "/auth/demo") {
+      if (state.demoFailure) return send({ error: "Espace de demonstration indisponible.", code: "DEMO_UNAVAILABLE" }, 503);
+      state.signedIn = true;
+      return send({ user: USER }, 201);
+    }
+    if (path === "/analyses" && method === "GET") return send({ runs: state.runs });
+    // One segment only: /analyses/:runId/answer and /sections are handled below.
+    if (/^\/analyses\/[^/]+$/.test(path)) return send(RUN_DETAIL);
     if (path === "/auth/logout") { state.signedIn = false; return route.fulfill({ status: 204 }); }
     if (path === "/company") return send(state.company ? COMPANY : { profile: null, references: [], team: [] });
     if (path === "/company/documents") return send({ documents: state.company ? COMPANY_DOCUMENTS : [] });
