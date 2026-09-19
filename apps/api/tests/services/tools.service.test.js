@@ -22,6 +22,14 @@ const liveTavily = {
   },
 };
 
+const brokenDocumentsBase = {
+  async searchSimilarChunks() { return []; },
+  async findChunks() { return []; },
+  async findByIdForOwner() { return undefined; },
+  async findCompanyDocuments() { return []; },
+  async updateChunk() {},
+};
+
 function build(overrides = {}) {
   return new ToolsService({
     llm: stubLlm,
@@ -213,10 +221,13 @@ describe('search_documents', () => {
 describe('get_company_facts', () => {
   const company = {
     async getProfile() { return { raisonSociale: 'ACME', ca2024: 12_000_000 }; },
+    // The real column names, and montantHtMad as the STRING a numeric column
+    // hands back. An earlier fixture invented `montant` / `annee`, which is what
+    // let the filters read undefined on every row and return an empty list.
     async findAllReferences() {
       return [
-        { id: 'REF-01', secteur: 'assainissement', montant: 8_000_000, annee: 2023 },
-        { id: 'REF-02', secteur: 'voirie', montant: 2_000_000, annee: 2021 },
+        { id: 'REF-01', secteur: 'éducation', montantHtMad: '8000000', anneeDebut: 2023 },
+        { id: 'REF-02', secteur: 'voirie', montantHtMad: '2000000', anneeDebut: 2021 },
       ];
     },
     async findAllTeam() { return [{ id: 'CV-01', poste: 'Chef de projet' }]; },
@@ -234,7 +245,25 @@ describe('get_company_facts', () => {
   it('filters references by sector and by amount', async () => {
     const result = await build({ company }).execute(
       'get_company_facts',
-      { scope: 'references', secteur: 'assainissement', montantMin: 5_000_000 },
+      { scope: 'references', secteur: 'éducation', montantMin: 5_000_000 },
+      CONTEXT,
+    );
+    expect(result.references.map((r) => r.id)).toEqual(['REF-01']);
+  });
+
+  it('matches a sector the model spelled without its accent', async () => {
+    const result = await build({ company }).execute(
+      'get_company_facts',
+      { scope: 'references', secteur: 'education' },
+      CONTEXT,
+    );
+    expect(result.references.map((r) => r.id)).toEqual(['REF-01']);
+  });
+
+  it('keeps the references a year filter should keep', async () => {
+    const result = await build({ company }).execute(
+      'get_company_facts',
+      { scope: 'references', anneeMin: 2022 },
       CONTEXT,
     );
     expect(result.references.map((r) => r.id)).toEqual(['REF-01']);
@@ -263,6 +292,33 @@ describe('get_company_facts', () => {
 });
 
 describe('read_source_page', () => {
+  it('rejects a documentId that is not a uuid without leaking the query', async () => {
+    // The model borrowed "dossier" from the corpus enum of search_documents.
+    // Postgres rejected it and the raw SQL came back as the tool result.
+    const result = await build().execute(
+      'read_source_page',
+      { documentId: 'dossier', page: 2 },
+      CONTEXT,
+    );
+    expect(result.error).toMatch(/documentId invalide/);
+    expect(result.error).not.toMatch(/select/i);
+  });
+
+  it('never returns a database query as a tool result', async () => {
+    const broken = {
+      async findByIdForOwner() {
+        throw new Error('Failed query: select "id", "owner_id" from "documents" where ...');
+      },
+    };
+    const result = await build({ documents: { ...brokenDocumentsBase, ...broken } }).execute(
+      'read_source_page',
+      { documentId: '0c10dc6c-4ddb-4d3b-8b4e-e4f37c7b9030', page: 2 },
+      CONTEXT,
+    );
+    expect(result.error).not.toMatch(/select/i);
+    expect(result.error).toMatch(/Erreur technique/);
+  });
+
   const chunks = [
     { id: 'c3', page: 3, article: 'Article 7.2', content: 'Le candidat doit...', extraction: 'text_layer' },
     { id: 'c4', page: 4, article: null, content: '', extraction: 'unread' },
@@ -274,10 +330,12 @@ describe('read_source_page', () => {
     async findCompanyDocuments() { return []; },
     async updateChunk() {},
   };
+  const D1 = '0c10dc6c-4ddb-4d3b-8b4e-e4f37c7b9030';
+  const D9 = '181754c7-d138-4a04-a5a1-09461b9077d2';
   const tools = () => build({ documents });
 
   it('returns the exact page text for verification', async () => {
-    const result = await tools().execute('read_source_page', { documentId: 'd1', page: 3 }, CONTEXT);
+    const result = await tools().execute('read_source_page', { documentId: D1, page: 3 }, CONTEXT);
     expect(result).toMatchObject({ readable: true, page: 3, article: 'Article 7.2' });
   });
 
@@ -285,14 +343,14 @@ describe('read_source_page', () => {
     // Empty text would read as "this page says nothing", which is how an agent
     // ends up inventing requirements for a scan it could not read. The OCR retry
     // fails here (no such file), and the answer must still be honest.
-    const result = await tools().execute('read_source_page', { documentId: 'd1', page: 4 }, CONTEXT);
+    const result = await tools().execute('read_source_page', { documentId: D1, page: 4 }, CONTEXT);
     expect(result.readable).toBe(false);
     expect(result.text).toBeUndefined();
     expect(result.note).toMatch(/pas pu etre lue/);
   });
 
   it('reports a missing page as an error', async () => {
-    const result = await tools().execute('read_source_page', { documentId: 'd1', page: 99 }, CONTEXT);
+    const result = await tools().execute('read_source_page', { documentId: D1, page: 99 }, CONTEXT);
     expect(result.error).toMatch(/introuvable/);
   });
 
@@ -302,7 +360,7 @@ describe('read_source_page', () => {
     const other = build({
       documents: { ...documents, async findByIdForOwner() { return undefined; } },
     });
-    const result = await other.execute('read_source_page', { documentId: 'd9', page: 1 }, CONTEXT);
+    const result = await other.execute('read_source_page', { documentId: D9, page: 1 }, CONTEXT);
     expect(result.error).toMatch(/introuvable/);
   });
 });

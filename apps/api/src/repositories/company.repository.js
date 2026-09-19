@@ -10,7 +10,7 @@
  * keeps the seed idempotent without a TRUNCATE while letting two users both hold
  * a "REF-01" of their own.
  */
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { companyProfile, companyReferences, teamMembers } from '../db/schema/index.js';
 
@@ -43,20 +43,6 @@ export default class CompanyRepository {
       .from(companyReferences)
       .where(eq(companyReferences.ownerId, ownerId))
       .orderBy(companyReferences.id);
-  }
-
-  /**
-   * @param {string} ownerId
-   * @param {string} secteur
-   * @returns {Promise<object[]>}
-   */
-  async findReferencesBySector(ownerId, secteur) {
-    return this.db
-      .select()
-      .from(companyReferences)
-      .where(
-        and(eq(companyReferences.ownerId, ownerId), eq(companyReferences.secteur, secteur)),
-      );
   }
 
   /**

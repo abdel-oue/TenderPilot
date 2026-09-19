@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evidenceCatalog, validateMatchEvidence } from '../../src/lib/evidence.js';
+import { EVIDENCE_SYSTEM } from '../../src/prompts/evidence.prompts.js';
 
 const requirement = { id: 'r1', nature: 'capacite', obligation: 'eliminatoire' };
 const match = { requirementId: 'r1', status: 'met', confidence: 0.99, evidence: ['REF-01'] };
@@ -25,5 +26,20 @@ describe('company evidence boundary', () => {
   });
   it('does not choose between duplicate model verdicts', () => {
     expect(validateMatchEvidence([requirement], [match, match], evidenceCatalog(company)).matches[0].status).toBe('unknown');
+  });
+});
+
+// The reviewer is an LLM, so its rule lives in the prompt. What is testable is
+// that BOTH halves of the distinction are still stated: dropping the first half
+// turned "84 employees, but no CNSS slip attached" into a no-go on AO-2026-002
+// and -003; dropping the second would let a profile line pass for a certificate.
+describe('EVIDENCE_SYSTEM', () => {
+  it('tells the reviewer a missing piece justificative is not a missing capacity', () => {
+    expect(EVIDENCE_SYSTEM).toMatch(/bordereau CNSS/);
+    expect(EVIDENCE_SYSTEM).toMatch(/n'est PAS une\s+capacite manquante/);
+  });
+
+  it('still refuses a certification that is only declared in the profile', () => {
+    expect(EVIDENCE_SYSTEM).toMatch(/CERTIFICATION[\s\S]*supported=false/);
   });
 });

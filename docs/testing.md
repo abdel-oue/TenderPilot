@@ -11,7 +11,7 @@ Au dernier passage, le 19/09/2026 :
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Globale (api + web) | `npm test` | **390 tests passent, 0 échoue**, sur 42 fichiers |
+| Globale (api + web) | `npm test` | **399 tests passent, 0 échoue**, sur 42 fichiers |
 | Unitaires frontend | `npx vitest run --project web` | **22 tests passent**, sur 5 fichiers |
 | Navigateur, api interceptée | `npm run test:e2e` | 70 parcours déclarés (desktop + mobile), 1 ignoré sur desktop — il ne teste que le menu mobile |
 | Smoke, pile et modèle réels | `npm run test:e2e:smoke -w @tenderpilot/web` | hors suite par défaut, exige `npm run up` |

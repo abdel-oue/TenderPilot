@@ -113,10 +113,13 @@ services:
       target: api
     environment: *api_env
     volumes: *api_volumes
-    # Index the company corpus, then serve. Indexing is idempotent and skips
-    # anything already embedded, so this is cheap on every restart but the first.
-    # `;` not `&&`: a failed index must still leave a worker running.
-    command: sh -c "node src/db/reindex.js; node src/worker.js"
+    # Index the company corpus IN THE BACKGROUND, and start consuming now.
+    # Indexing is idempotent and skips anything already embedded, so it is one
+    # query on every restart but the first - and on that first one it is OCR
+    # plus embeddings, i.e. minutes. Sequentially (`;`) the worker did not exist
+    # for those minutes, so the very first analysis sat in `queued` with nobody
+    # listening. `&` also keeps a failed index from taking the worker with it.
+    command: sh -c "node src/db/reindex.js & node src/worker.js"
     depends_on:
       api:
         condition: service_healthy

@@ -279,7 +279,7 @@ unitaire, c'est une facture instable.
 |---|---|
 | l'api ne démarre pas, `Invalid environment` | une clé manque dans `.env` ; le message nomme laquelle |
 | `DOCUMENT_FILE_MISSING` | le corpus n'est pas dans `seed/data/` |
-| l'analyse reste en `queued` | le worker est arrêté : `npm run logs` |
+| l'analyse reste en `queued` | le worker est arrêté : `npm run logs`, attendre `worker: ready` |
 | `relation already exists` au démarrage | une migration appliquée a été éditée. Ne jamais faire ça |
 | l'OCR échoue | `pdftoppm` / `tesseract` absents — ils sont dans l'image api, pas sur l'hôte |
 | dimension d'embedding refusée | `EMBEDDING_DIMENSIONS` ≠ 512 |

@@ -64,6 +64,8 @@ import TavilyService from './tavily.service.js';
 
 const COMPANY_KINDS = ['memoire', 'attestation', 'profil'];
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Bounded in code, never in a prompt - the same rule as MAX_REDRAFTS. A model
 // told to "ask sparingly" will still ask eleven times on the one dossier being
 // demoed, and every ask stops the run dead until a human notices.
@@ -279,7 +281,10 @@ export default class ToolsService {
     } catch (error) {
       if (isGraphBubbleUp(error)) throw error;
       logger.warn({ tool: name, err: error.message }, 'tool: failed');
-      return { error: error.message };
+      // The full error goes to the log; what comes back is read by a model and
+      // rendered in the dirigeant's activity feed, and a dumped SQL statement
+      // helps neither of them.
+      return { error: sanitizeToolError(error) };
     }
   }
 
@@ -455,14 +460,16 @@ export default class ToolsService {
       case 'references': {
         let rows = await this.company.findAllReferences(context.ownerId);
         if (secteur) {
-          const wanted = secteur.toLowerCase();
-          rows = rows.filter((r) => String(r.secteur ?? '').toLowerCase().includes(wanted));
+          // The model writes "education" as often as "éducation"; an accent must not
+          // silently empty the list and turn a held reference into a blocker.
+          const wanted = normalize(secteur);
+          rows = rows.filter((r) => normalize(r.secteur).includes(wanted));
         }
         if (typeof montantMin === 'number') {
-          rows = rows.filter((r) => Number(r.montant ?? 0) >= montantMin);
+          rows = rows.filter((r) => Number(r.montantHtMad) >= montantMin);
         }
         if (typeof anneeMin === 'number') {
-          rows = rows.filter((r) => Number(r.annee ?? 0) >= anneeMin);
+          rows = rows.filter((r) => r.anneeDebut >= anneeMin);
         }
         return rows.length
           ? { scope, references: rows, count: rows.length }
@@ -520,6 +527,17 @@ export default class ToolsService {
    */
   async readSourcePage(documentId, page, ownerId) {
     if (!ownerId) return { error: 'Aucune entreprise associee a cette analyse.' };
+
+    // The model used to pass the literal "dossier" here, borrowed from the corpus
+    // enum of search_documents. Postgres rejects a non-uuid, and the raw query
+    // text came back as the tool result. Say what a documentId is instead.
+    if (!UUID.test(String(documentId ?? ''))) {
+      return {
+        error:
+          "documentId invalide : attendu l'identifiant du document (uuid) imprime " +
+          "sur l'exigence (documentId=...), et non le nom d'un corpus.",
+      };
+    }
 
     const document = await this.documents.findByIdForOwner(documentId, ownerId);
     if (!document) return { error: 'Document introuvable dans ce dossier.' };
@@ -823,6 +841,17 @@ export default class ToolsService {
  * @param {string[]} required
  * @returns {object}
  */
+/**
+ * @param {Error} error
+ * @returns {string} safe for a model and for the activity feed
+ */
+function sanitizeToolError(error) {
+  const message = String(error?.message ?? '');
+  return /failed query|select |insert |update |delete /i.test(message)
+    ? "Erreur technique pendant l'appel de l'outil. Le detail est dans les logs."
+    : message;
+}
+
 function fn(name, description, properties, required) {
   return {
     type: 'function',

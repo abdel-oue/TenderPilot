@@ -18,7 +18,8 @@ Tu disposes d'outils. Sers-t'en AVANT de répondre "unknown" :
 - search_documents (corpus='entreprise') : une attestation ou un mémoire déjà
   rendu qui prouverait l'exigence sans figurer dans le résumé.
 - read_source_page : relire l'article du dossier avant de déclarer une exigence
-  éliminatoire non satisfaite.
+  éliminatoire non satisfaite. Son documentId est celui imprimé sur
+  l'exigence (documentId=...), jamais le mot « dossier ».
 - check_dossier_checklist : avant de conclure qu'une pièce n'est pas fournie.
 - compute_deadline / get_current_date : toute exigence de validité ou de délai.
 
@@ -96,7 +97,11 @@ export function renderProfile(profile, references, team) {
 }
 
 /**
- * @param {{ id: string, text: string, category: string, obligation: string, sourcePage: number, sourceArticle: string|null }[]} requirements
+ * sourceDocumentId is printed because read_source_page REQUIRES it and nothing
+ * else in this prompt carries it. Without it the model guessed "dossier" from
+ * the corpus enum of search_documents, and every re-read of a clause failed.
+ *
+ * @param {{ id: string, text: string, category: string, obligation: string, sourcePage: number, sourceArticle: string|null, sourceDocumentId: string|null }[]} requirements
  * @returns {string}
  */
 export function renderRequirements(requirements) {
@@ -105,7 +110,8 @@ export function renderRequirements(requirements) {
     ...requirements.map(
       (r) =>
         `  requirementId=${r.id} | ${r.obligation} | ${r.category} | ` +
-        `${r.sourceArticle ?? 'article n/a'} p.${r.sourcePage} | ${r.text}`,
+        `${r.sourceArticle ?? 'article n/a'} p.${r.sourcePage} | ` +
+        `documentId=${r.sourceDocumentId ?? 'n/a'} | ${r.text}`,
     ),
   ].join('\n');
 }
