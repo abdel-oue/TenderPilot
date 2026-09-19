@@ -7,18 +7,25 @@ des tests.
 
 ## État actuel de la suite
 
-Au dernier passage (`npm test`) : **162 tests passent, 15 échouent, sur 22 fichiers**.
+Au dernier passage (`npm test`) : **273 tests passent, 0 échoue, sur 25 fichiers**.
 
-| Fichier | Échecs | Cause |
-|---|---|---|
-| `tests/controllers/analysis.controller.test.js` | 4 | les doubles de requête n'ont pas de `request.user` ; le contrôleur lit `request.user.id` depuis le cloisonnement par propriétaire (migration `0004_owner_scoping`) |
-| `tests/controllers/document.controller.test.js` | 5 | idem, et les faux dépôts n'exposent pas `findByIdForOwner` |
-| `tests/services/tools.service.test.js` | 6 | le faux `DocumentRepository` date d'avant `findByIdForOwner` |
+Les 15 échecs précédents étaient des tests en retard sur le code, pas des
+régressions du produit : trois fichiers doublaient des dépôts dont la signature
+avait changé au cloisonnement par compte (migration `0004_owner_scoping`). Ils
+ont été remis à la signature réelle — `request.user` sur les requêtes factices,
+`findByIdForOwner` sur les doubles — et non contournés.
 
-Ce sont des tests en retard sur le code, pas des régressions du produit : les trois
-fichiers doublent des dépôts dont la signature a changé quand tout est devenu
-cloisonné par compte. La correction est d'ajouter `user` aux requêtes factices et
-`findByIdForOwner` aux doubles.
+Ce qui a été ajouté en même temps :
+
+| Fichier | Ce qu'il couvre |
+|---|---|
+| `tests/services/llm.service.test.js` | la boucle d'outils : exécution, réinjection, bornage, échec du fournisseur, arguments malformés |
+| `tests/services/tools.service.test.js` | les 10 outils, le cloisonnement par propriétaire, et le fait que **tout outil déclaré est réellement dispatché** |
+| `tests/lib/calc.test.js` | l'arithmétique des montants, et le refus d'évaluer du code |
+| `tests/lib/dates.test.js` | les trois formats de date du corpus, jours ouvrés, dates impossibles |
+| `tests/repositories/analysis.repository.test.js` | une correction humaine n'est jamais écrasée par un brouillon d'agent |
+| `tests/services/score.service.test.js` | l'ordre des points bloquants par gravité |
+| `tests/lib/narration.test.js` | les phrases en français lues par le dirigeant — dont le fait qu'une recherche vide se lit comme vide, même si le modèle prétend le contraire |
 
 `npm run test:e2e` exécute désormais les parcours de la vitrine et de l’espace de
 travail, sur Chromium desktop et mobile. Le serveur Next local utilise le port

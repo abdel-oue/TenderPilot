@@ -153,12 +153,36 @@ Sur `AO-2026-004`, qui est un **scan intégral sans couche texte** :
 [ok] extractRequirements  11 exigences extraites                13228ms
 [ok] classifyRequirements 8 exigences eliminatoires             10072ms
 [ok] parseRubric          grille de notation : 5 criteres        7274ms
-[ok] matchProfile         0/11 couvertes par le profil          21990ms
+[ok] matchProfile         3/11 couvertes par le profil (4 appels d'outil)
+                          get_company_facts · search_documents  21990ms
 [ok] computeScore         score de couverture : 50/100              1ms
 [ok] decide               go - 0 point(s) bloquant(s)               2ms
-[ok] draft                4 sections redigees                   25920ms
+[ok] draft                4 sections redigees, 7 appels d'outil
+                          search_documents · calculate          25920ms
 [ok] compliance           4 sections validees, 0 refusees        8785ms
 ```
+
+Chaque appel d'outil est écrit pour le dirigeant, pas pour nous :
+
+```
+Pour vérifier si un de vos CV couvre les 10 ans exigés à l'article 8.
+  ↳ recherche « chef de projet certifié PMP » dans vos documents :
+    2 passages trouvés (p. 12, p. 4)
+  search_documents
+
+Pour vérifier si vous détenez la certification exigée.
+  ↳ recherche « certification ISO 22301 » dans vos documents :
+    aucun passage ne correspond
+  search_documents
+```
+
+La phrase du haut est **du modèle** : il remplit un argument `raison` sur l'appel
+qu'il faisait déjà, donc ça ne coûte ni appel supplémentaire ni latence. La ligne
+`↳` est **construite en code** à partir du résultat réel — le modèle ne raconte
+jamais ses propres résultats, c'est comme ça qu'on se retrouve avec « j'ai trouvé
+3 références » sous une recherche qui n'a rien trouvé. Le nom technique reste en
+dessous, en retrait : le dirigeant l'ignore, un évaluateur y voit qu'un vrai outil
+nommé a tourné.
 
 Sur `AO-2026-002`, l'agent rend un **no-go** et dit pourquoi :
 
@@ -210,6 +234,33 @@ Deux arêtes conditionnelles, et c'est là qu'est l'agent :
 Les deux bornes vivent dans la condition d'arête, jamais dans un prompt. On
 n'*demande* pas au modèle de s'arrêter, on l'en empêche.
 
+### La ceinture d'outils
+
+Le **Writer** et le **Matcher** reçoivent 9 outils (10 avec `TAVILY_API_KEY`).
+Les définitions partent au modèle dans la requête, le modèle choisit ce qu'il
+appelle, `LlmService.runToolLoop` exécute et réinjecte les résultats. Les appels
+sont les siens, pas une recherche codée en dur :
+
+| | |
+|---|---|
+| `search_documents` | pgvector, corpus entreprise **ou** dossier |
+| `get_company_facts` | profil / références / équipe / marchés passés, filtrables |
+| `read_source_page` | texte exact d'une page, avec repli OCR |
+| `get_run_state` | étapes, appels, exigences, verdict courant — le « mémoriser » |
+| `check_dossier_checklist` | pièces exigées × documents réellement déposés |
+| `compute_deadline` · `get_current_date` | arithmétique de dates |
+| `calculate` | arithmétique de montants, sans `eval` |
+| `simulate_score` | rejoue le verdict sous hypothèse |
+| `web_search` | Tavily — **absent si aucune clé** |
+
+`compute_deadline`, `get_current_date` et `calculate` existent parce qu'un modèle
+se trompe sur une date ou sur 1,5 % de 2 400 000 **avec assurance**, et qu'un
+montant faux dans un mémoire est l'échec le plus visible possible.
+
+Le Matcher en particulier : chaque `unknown` qu'il produit devient un point
+bloquant, donc un `unknown` qu'un appel d'outil aurait levé est une faute, pas de
+la prudence. Détail et arbitrages dans [docs/agents.md](docs/agents.md).
+
 Les autres diagrammes — cas d'usage, services, couches, séquence d'une analyse,
 extraction page par page, modèle de données — sont dans
 **[docs/diagrams.md](docs/diagrams.md)**, en Mermaid et copiables tels quels.
@@ -223,6 +274,12 @@ Comportement de l'agent : [docs/agents.md](docs/agents.md).
   jugement.
 - **Admettre une lacune.** Sans élément probant, la section porte
   `[A COMPLETER PAR L'HUMAIN]` et dit ce qui manque.
+- **La correction humaine gagne toujours.** Une section réécrite par un humain
+  n'est jamais écrasée par un brouillon d'agent, et elle est relue par les
+  analyses suivantes du même dossier — pas seulement par le run en cours.
+- **Classer les points bloquants par gravité.** Une exigence *prouvée* non
+  satisfaite passe avant une exigence *non évaluée*, et le verdict dit lequel des
+  deux cas il a sous les yeux plutôt que d'affirmer la même chose des deux.
 - **Signaler ce qui n'a pas été lu.** Une page que l'OCR n'a pas pu lire est
   remontée comme illisible, jamais renvoyée comme page vide.
 - **Ne pas fabriquer une disqualification.** Seule une *capacité* exigée et absente
@@ -246,9 +303,9 @@ npm test          # sans réseau ni base de données
 
 Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.
 
-**Dernier passage global documenté au 18/09/2026 : 162 tests passent, 15 échouent** — trois fichiers dont les
-doubles de dépôts datent d'avant le cloisonnement par compte (migration
-`0004_owner_scoping`), inchangés par le routage par page. Ce résultat global est
-distinct des vérifications frontend ci-dessus. `npm run test:e2e` lance désormais
-la vitrine et l’espace de travail avec API simulée. Détail et correctif des tests
-backend dans [docs/testing.md](docs/testing.md).
+**Dernier passage global documenté au 19/09/2026 : 273 tests passent, 0 échoue**
+(24 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
+au cloisonnement par compte (migration `0004_owner_scoping`) : les tests ont été
+remis à la signature réelle, pas contournés. Ce résultat global est distinct des
+vérifications frontend ci-dessus. `npm run test:e2e` lance la vitrine et l'espace
+de travail avec API simulée. Détail dans [docs/testing.md](docs/testing.md).

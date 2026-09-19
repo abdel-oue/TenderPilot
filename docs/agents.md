@@ -42,14 +42,58 @@ Une boucle d'agent sans borne dans une démo en direct est un mode de panne.
 
 ## Les outils
 
-L'agent appelle de vrais outils (`apps/api/src/services/tools.service.js`) :
+Les définitions partent au modèle dans la requête (`tools`), le modèle **choisit**
+ce qu'il appelle, et `LlmService.runToolLoop` exécute puis réinjecte les résultats
+jusqu'à ce qu'il arrête d'appeler. Ce n'est pas une recherche codée en dur
+enveloppée dans une boucle : les appels sont les siens.
+
+Le **Writer** et le **Matcher** portent la ceinture. Le Matcher surtout : chaque
+`unknown` qu'il produit devient un bloquant dans `findBlockers`, donc un `unknown`
+qu'un appel d'outil aurait levé est une faute, pas de la prudence.
 
 | Outil | Ce qu'il fait | Pourquoi il existe |
 |---|---|---|
-| `search_company_docs` | recherche pgvector dans les mémoires rendus, attestations et profil | c'est ce qui permet de citer REF-07 **au lieu de l'inventer** |
-| `read_source_page` | relit le texte exact d'une page | vérifier une citation avant de déclarer une exigence éliminatoire |
-| `get_run_history` | ce que cette analyse a déjà tenté | empêche de relancer une requête qui a déjà échoué — le verbe « mémoriser » |
-| `web_search` | Tavily | marchés similaires attribués, contexte acheteur. **Absent si aucune clé** |
+| `search_documents` | pgvector sur le corpus entreprise **ou** sur ce dossier (`corpus`) | citer REF-07 **au lieu de l'inventer** ; retrouver où une clause est écrite |
+| `get_company_facts` | profil / références / équipe / marchés passés, en structuré et filtrable | le vectoriel ne répond pas à « CA 2024 ? » ni à « références > 5 MDH en assainissement » |
+| `read_source_page` | relit le texte exact d'une page, **avec repli OCR** | vérifier une citation avant de déclarer une exigence éliminatoire |
+| `get_run_state` | étapes, appels, exigences, verdict courant | le verbe « mémoriser » : empêche de relancer une requête déjà échouée |
+| `check_dossier_checklist` | pièces exigées × documents réellement déposés | transforme « il manque peut-être X » en fait vérifié |
+| `compute_deadline` | jours calendaires et ouvrés avant l'échéance | les modèles se trompent sur l'arithmétique des dates **avec assurance** |
+| `calculate` | arithmétique exacte (caution 1,5 %, TVA, pénalités) | un montant faux dans un mémoire est l'échec le plus visible possible |
+| `get_current_date` | la date du jour | sans lui le modèle raisonne depuis sa date d'entraînement |
+| `simulate_score` | rejoue le verdict sous hypothèse | transforme un no-go en conseil actionnable |
+| `web_search` | Tavily, extraits ou page complète | marchés similaires attribués, contexte acheteur. **Absent si aucune clé** |
+
+Trois outils écartés volontairement : un scraper de marchespublics.gov.ma (HTML
+fragile, casse en démo), une traduction FR/AR (spéculatif tant qu'aucun dossier
+arabe n'arrive), et un outil « appeler un sous-agent » — le graphe est
+l'orchestrateur, il n'en faut pas un second.
+
+### Ce que le dirigeant lit
+
+La trace n'est pas pour nous. `get_company_facts` ne veut rien dire pour un
+dirigeant de PME, et un flux qu'il ne peut pas lire ne prouve rien — tout
+l'intérêt d'afficher les étapes est que quelqu'un puisse les vérifier.
+
+Chaque appel d'outil est donc affiché en trois parties, et le découpage est
+volontaire :
+
+| | D'où ça vient | Pourquoi |
+|---|---|---|
+| **la raison** | du modèle, via un argument `raison` présent sur **tous** les outils | c'est son raisonnement réel, pas notre reformulation — et c'est gratuit, il remplit ce champ sur l'appel qu'il faisait déjà |
+| **le résultat** | de `lib/narration.js`, à partir des vrais arguments et du vrai retour | déterministe, impossible à halluciner |
+| **le nom technique** | tel quel, en retrait | un lecteur technique veut voir qu'un vrai outil nommé a tourné |
+
+Le résultat n'est **jamais** demandé au modèle. Un agent qui raconte ses propres
+résultats, c'est exactement comme ça qu'apparaît « j'ai trouvé 3 références » sous
+une recherche qui n'en a trouvé aucune. `raison` est optionnel sur tous les
+outils : un modèle qui l'oublie obtient quand même sa réponse, la ligne de
+résultat s'affiche seule. Et `raison` est retiré des arguments avant le dispatch,
+donc aucune implémentation d'outil n'a à savoir que ce champ existe.
+
+`calculate` n'utilise pas `eval` : l'expression est écrite par un modèle qui vient
+de lire le PDF d'un tiers. C'est une descente récursive sur six opérateurs, sans
+identifiant ni appel de fonction dans la grammaire — il n'y a rien d'où s'échapper.
 
 Un outil ne lève jamais d'exception dans le graphe : il renvoie `{ error }`. Un
 outil cassé dégrade une étape, il ne tue pas un dossier.

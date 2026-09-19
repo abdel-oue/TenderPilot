@@ -37,7 +37,38 @@ export default function TracePanel({ trace, status }: TracePanelProps) {
               >
                 {entry.node}
               </span>
-              <span className="flex-1 text-muted">{entry.summary}</span>
+              <div className="flex-1 space-y-1">
+                <p className="text-muted">{entry.summary}</p>
+                {/* The tools the agent CHOSE to call on this step. Without this
+                    row the belt is a claim; with it, it is something the reader
+                    watches happen. */}
+                {entry.tools && entry.tools.length > 0 ? (
+                  <ul data-testid="trace-tools" className="space-y-1.5 pt-1">
+                    {entry.tools.map((tool, position) => (
+                      <li
+                        key={`${tool.name}-${position}`}
+                        data-testid="trace-tool"
+                        className="border-l-2 border-border pl-2"
+                      >
+                        {/* The model's own reason, in the reader's language. */}
+                        {tool.raison ? <p className="text-mini">{tool.raison}</p> : null}
+                        <p className="text-mini text-muted">
+                          <span aria-hidden="true">↳ </span>
+                          {tool.outcome}
+                        </p>
+                        {/* Secondary on purpose: the dirigeant ignores it, a
+                            technical reader wants to see a real named tool. */}
+                        <span
+                          data-testid="trace-tool-name"
+                          className="font-mono text-mini text-muted/60"
+                        >
+                          {tool.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
               <span className="shrink-0 text-mini text-muted">{formatDuration(entry.ms)}</span>
             </li>
           ))}

@@ -142,3 +142,52 @@ describe('verdict', () => {
     expect(result.confidence).toBe(0.75);
   });
 });
+
+describe('blocker ordering', () => {
+  const requirements = [
+    { id: 'r1', obligation: 'eliminatoire', nature: 'capacite', text: 'Non evaluee', sourcePage: 2 },
+    { id: 'r2', obligation: 'eliminatoire', nature: 'capacite', text: 'Clairement non satisfaite', sourcePage: 47 },
+    { id: 'r3', obligation: 'eliminatoire', nature: 'capacite', text: 'Non satisfaite, moins sure', sourcePage: 9 },
+  ];
+
+  it('puts a proven failure ahead of one it simply could not assess', () => {
+    // `verdict` calls blockers[0] "la plus bloquante". Unsorted, that sentence
+    // was a claim about whichever requirement happened to be extracted first.
+    const blockers = findBlockers(requirements, [
+      { requirementId: 'r1', status: 'unknown', confidence: 0.9 },
+      { requirementId: 'r2', status: 'unmet', confidence: 0.95 },
+      { requirementId: 'r3', status: 'unmet', confidence: 0.4 },
+    ]);
+
+    expect(blockers.map((b) => b.requirementId)).toEqual(['r2', 'r3', 'r1']);
+  });
+
+  it('surfaces an eliminatory requirement buried deep in the document first', () => {
+    // The jury hides one on page 47. Document order would bury it behind
+    // whatever sits on page 2.
+    const blockers = findBlockers(requirements, [
+      { requirementId: 'r1', status: 'met', confidence: 0.9 },
+      { requirementId: 'r2', status: 'unmet', confidence: 0.95 },
+      { requirementId: 'r3', status: 'met', confidence: 0.9 },
+    ]);
+
+    expect(blockers[0].sourcePage).toBe(47);
+    expect(verdict(30, blockers).justification).toContain('Clairement non satisfaite');
+  });
+
+  it('carries the status and confidence so a human can arbitrate', () => {
+    const [blocker] = findBlockers([requirements[0]], [
+      { requirementId: 'r1', status: 'unknown', confidence: 0.3 },
+    ]);
+    expect(blocker).toMatchObject({ status: 'unknown', confidence: 0.3 });
+  });
+
+  it('says plainly when the top blocker was never actually assessed', () => {
+    // Humility over false authority: "we could not check this" must not read as
+    // "you do not qualify".
+    const blockers = findBlockers([requirements[0]], [
+      { requirementId: 'r1', status: 'unknown', confidence: 0.3 },
+    ]);
+    expect(verdict(10, blockers).justification).toMatch(/trancher par un humain/);
+  });
+});

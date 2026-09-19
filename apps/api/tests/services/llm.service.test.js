@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import LlmService, { TIERS } from '../../src/services/llm.service.js';
 
@@ -14,8 +14,13 @@ function fakeProvider(payloads, model = 'fake-model') {
       calls.push(options);
       const next = payloads.shift();
       if (next instanceof Error) throw next;
+      // A queued object is a tool-calling turn; a queued string is content.
+      const toolCalls = typeof next === 'object' && next !== null ? next.toolCalls : [];
+      const content = typeof next === 'string' ? next : (next?.content ?? '');
       return {
-        content: next,
+        content,
+        toolCalls: toolCalls ?? [],
+        message: { role: 'assistant', content, tool_calls: toolCalls },
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
         latencyMs: 42,
         model,
@@ -208,5 +213,234 @@ describe('LlmService stub mode', () => {
     const service = new LlmService({ stub: true, usageRepository: fakeUsage() });
     const [vector] = await service.embed(['bonjour']);
     expect(vector).toHaveLength(512);
+  });
+});
+
+/** One tool-calling turn, in the shape a provider returns it. */
+function toolTurn(id, name, args) {
+  return { toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] };
+}
+
+describe('LlmService tool loop', () => {
+  it('executes the tool the model asked for and feeds the result back', async () => {
+    const provider = fakeProvider([
+      toolTurn('c1', 'get_company_facts', { scope: 'profil' }),
+      '{"answer":"oui"}',
+    ]);
+    const { service } = build(provider);
+    const execute = vi.fn(async () => ({ profil: { ca2024: 12 } }));
+
+    const result = await service.complete({
+      name: 'writer',
+      system: 's',
+      user: 'u',
+      schema,
+      toolkit: { definitions: [{ type: 'function' }], execute },
+    });
+
+    expect(execute).toHaveBeenCalledWith('get_company_facts', { scope: 'profil' });
+    expect(result).toEqual({ answer: 'oui' });
+
+    // The tool result really reached the model, as a tool message tied to the
+    // call id - a provider rejects anything else.
+    const last = provider.calls.at(-1).messages;
+    const toolMessage = last.find((m) => m.role === 'tool');
+    expect(toolMessage.tool_call_id).toBe('c1');
+    expect(toolMessage.content).toContain('12');
+  });
+
+  it('offers the tools instead of forcing a JSON response format', async () => {
+    // Asking for json_object while offering tools lets the provider satisfy the
+    // format instead of calling the tool, which silently disables the belt. The
+    // zod schema is the real contract either way.
+    const provider = fakeProvider([toolTurn('c1', 't', {}), '{"answer":"oui"}']);
+    const { service } = build(provider);
+
+    await service.complete({
+      name: 'writer',
+      system: 's',
+      user: 'u',
+      schema,
+      toolkit: { definitions: [{ type: 'function' }], execute: async () => ({}) },
+    });
+
+    expect(provider.calls[0].tools).toHaveLength(1);
+  });
+
+  it('takes the answer from the turn that ended the loop, rather than asking again', async () => {
+    // The model stops calling tools because it is ready to answer, and the
+    // system prompt already asks for JSON. Spending another reasoning-tier call
+    // to re-ask the same question is pure latency and cost, once per section.
+    const provider = fakeProvider([toolTurn('c1', 't', {}), '{"answer":"oui"}']);
+    const { service } = build(provider);
+
+    const result = await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute: async () => ({}) },
+    });
+
+    expect(result).toEqual({ answer: 'oui' });
+    expect(provider.calls).toHaveLength(2);
+  });
+
+  it('falls back to a proper schema turn when the loop ends on prose', async () => {
+    const provider = fakeProvider(['Je vais maintenant rediger.', '{"answer":"oui"}']);
+    const { service } = build(provider);
+
+    const result = await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute: async () => ({}) },
+    });
+
+    expect(result).toEqual({ answer: 'oui' });
+    expect(provider.calls).toHaveLength(2);
+    // The recovery turn asks for the shape, so it carries the format constraint.
+    expect(provider.calls.at(-1).tools).toBeUndefined();
+  });
+
+  it('keeps calling tools across several rounds', async () => {
+    const provider = fakeProvider([
+      toolTurn('c1', 'search_documents', { query: 'a' }),
+      toolTurn('c2', 'search_documents', { query: 'b' }),
+      '{"answer":"oui"}',
+    ]);
+    const { service } = build(provider);
+    const execute = vi.fn(async () => ({ extracts: [] }));
+
+    await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute },
+    });
+
+    expect(execute.mock.calls.map((c) => c[1].query)).toEqual(['a', 'b']);
+  });
+
+  it('bounds the loop, so a model that never stops calling tools cannot hang a worker', async () => {
+    // A model that keeps calling tools forever must not pin a BullMQ worker.
+    const payloads = Array.from({ length: 20 }, (_, i) => toolTurn('c' + i, 't', {}));
+    payloads.push('{"answer":"oui"}');
+    const provider = fakeProvider(payloads);
+    const { service } = build(provider);
+    const execute = vi.fn(async () => ({}));
+
+    // The model never answers, so the call fails loud after its budget - it does
+    // not keep going, and it does not quietly return a default.
+    await expect(
+      service.complete({
+        name: 'writer', system: 's', user: 'u', schema,
+        toolkit: { definitions: [{}], execute, maxRounds: 3 },
+      }),
+    ).rejects.toMatchObject({ code: 'SCHEMA_VALIDATION_FAILED' });
+
+    expect(execute).toHaveBeenCalledTimes(3);
+    // 3 tool rounds + 2 schema attempts. Not 21.
+    expect(provider.calls).toHaveLength(5);
+  });
+
+  it('reports every tool call to the caller, so the trace can show them', async () => {
+    const provider = fakeProvider([toolTurn('c1', 'calculate', { expression: '1+1' }), '{"answer":"oui"}']);
+    const { service } = build(provider);
+    const seen = [];
+
+    await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute: async () => ({ value: 2 }), onToolCall: (c) => seen.push(c) },
+    });
+
+    expect(seen).toEqual([{ tool: 'calculate', args: { expression: '1+1' }, result: { value: 2 } }]);
+  });
+
+  it('answers anyway when the tool phase fails outright', async () => {
+    // Evidence gathering is best-effort: losing it costs the answer its
+    // citations, which the Writer already handles by flagging the section.
+    const provider = fakeProvider([new Error('provider down'), '{"answer":"oui"}']);
+    const { service } = build(provider);
+
+    const result = await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute: async () => ({}) },
+    });
+
+    expect(result).toEqual({ answer: 'oui' });
+  });
+
+  it('records the tool rounds as their own usage rows', async () => {
+    const provider = fakeProvider([toolTurn('c1', 't', {}), '{"answer":"oui"}']);
+    const { service, usage } = build(provider);
+
+    await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute: async () => ({}) },
+    });
+
+    // Both rounds are attributed, so the cost of the tool belt is visible in the
+    // dashboard rather than hidden inside the agent's single line item.
+    expect(usage.rows.map((r) => r.operation)).toEqual(['writer:tools', 'writer:tools']);
+  });
+
+  it('survives a model that sends malformed tool arguments', async () => {
+    const provider = fakeProvider([
+      { toolCalls: [{ id: 'c1', function: { name: 't', arguments: 'not json' } }] },
+      '{"answer":"oui"}',
+    ]);
+    const { service } = build(provider);
+    const execute = vi.fn(async () => ({}));
+
+    await service.complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      toolkit: { definitions: [{}], execute },
+    });
+
+    expect(execute).toHaveBeenCalledWith('t', {});
+  });
+});
+
+describe('LlmService stub mode with a tool belt', () => {
+  const stubbed = () => new LlmService({ stub: true, usageRepository: fakeUsage() });
+
+  it('still fires the declared probe, so the belt cannot rot untested', async () => {
+    // Offline, the tool still runs against the real repositories - owner
+    // scoping, pgvector, the trace. A stub that skipped the tools is exactly how
+    // the previous belt rotted into dead code without a single test failing.
+    const execute = vi.fn(async () => ({ extracts: [] }));
+
+    const result = await stubbed().complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      stub: { answer: 'oui' },
+      toolkit: {
+        definitions: [{ type: 'function' }],
+        execute,
+        stubCall: () => ({ tool: 'search_documents', args: { query: 'q', corpus: 'entreprise' } }),
+      },
+    });
+
+    expect(execute).toHaveBeenCalledWith('search_documents', { query: 'q', corpus: 'entreprise' });
+    expect(result).toEqual({ answer: 'oui' });
+  });
+
+  it('reports the stubbed tool call, so the trace looks the same offline', async () => {
+    const seen = [];
+    await stubbed().complete({
+      name: 'writer', system: 's', user: 'u', schema,
+      stub: { answer: 'oui' },
+      toolkit: {
+        definitions: [{}],
+        execute: async () => ({ ok: true }),
+        onToolCall: (c) => seen.push(c.tool),
+        stubCall: () => ({ tool: 'get_company_facts', args: { scope: 'profil' } }),
+      },
+    });
+
+    expect(seen).toEqual(['get_company_facts']);
+  });
+
+  it('skips the probe when the agent declared no tools', async () => {
+    const execute = vi.fn();
+    await stubbed().complete({
+      name: 'extractor', system: 's', user: 'u', schema,
+      stub: { answer: 'oui' },
+      toolkit: { definitions: [], execute, stubCall: () => ({ tool: 't', args: {} }) },
+    });
+    expect(execute).not.toHaveBeenCalled();
   });
 });

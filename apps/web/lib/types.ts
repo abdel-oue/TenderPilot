@@ -36,6 +36,18 @@ export interface TraceEntry {
   summary: string;
   status: "ok" | "error" | "retry";
   ms?: number;
+  /** Tools the agent chose to call on this step, in order. */
+  tools?: ToolNarration[];
+}
+
+/** One tool call, written for the person reading the screen. */
+export interface ToolNarration {
+  /** The raw tool name. Secondary: evidence for a technical reader. */
+  name: string;
+  /** The model's own reason for calling it. Null if it did not give one. */
+  raison: string | null;
+  /** What actually came back, derived from the real result, never from the model. */
+  outcome: string;
 }
 
 export interface AnalysisSection {

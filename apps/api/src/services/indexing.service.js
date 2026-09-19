@@ -1,6 +1,6 @@
 /**
  * Indexing Service
- * Turns the company's own documents into something search_company_docs can find.
+ * Turns the company's own documents into something search_documents can find.
  *
  * Two halves, and both were missing:
  *   1. the company corpus (attestations, past memoires, profil) has tenderId NULL,

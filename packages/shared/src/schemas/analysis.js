@@ -48,6 +48,19 @@ export const analysisSchema = verdictSchema.extend({
       at: z.string(),
       summary: z.string(),
       status: z.enum(['ok', 'error', 'retry']),
+      ms: z.number().optional(),
+      tools: z
+        .array(
+          z.object({
+            name: z.string(),
+            // The model's own words for why it reached for this tool.
+            raison: z.string().nullable(),
+            // Built from the real result, never from the model: an empty search
+            // says so here whatever the model claimed.
+            outcome: z.string(),
+          }),
+        )
+        .optional(),
     }),
   ),
   generatedAt: z.string().nullable(),

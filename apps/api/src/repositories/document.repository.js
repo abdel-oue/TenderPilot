@@ -64,7 +64,7 @@ export default class DocumentRepository {
   /**
    * The company's own corpus: attestations, past memoires, the profil. These have
    * tenderId NULL - they belong to the company, not to one dossier - and they are
-   * what search_company_docs reads. Without them the Writer has nothing real to
+   * what search_documents reads. Without them the Writer has nothing real to
    * cite and every section comes back marked for a human.
    * @param {string} ownerId
    * @param {string[]} [kinds]
@@ -204,22 +204,42 @@ export default class DocumentRepository {
    *   another company's memoire would be the exact hallucination EX-03 guards against
    * @param {number} [k]
    * @param {string[]} [kinds] restrict to document kinds, e.g. ['memoire']
+   * @param {string|null} [tenderId] restrict to ONE dossier's own documents. The
+   *   kind filter alone is not enough once a second dossier exists: two tenders
+   *   both have a 'cps', and searching the dossier corpus without this would let
+   *   an agent cite another dossier's article as if it were this one's.
    * @returns {Promise<object[]>}
    */
-  async searchSimilarChunks(embedding, ownerId, k = 8, kinds) {
+  async searchSimilarChunks(embedding, ownerId, k = 8, kinds, tenderId) {
     const vector = sql.raw("'[" + embedding.join(',') + "]'::vector");
     const kindFilter = kinds?.length
       ? sql`and d.kind in (${sql.join(kinds.map((kind) => sql`${kind}`), sql`, `)})`
       : sql``;
+    const tenderFilter = tenderId ? sql`and d.tender_id = ${tenderId}` : sql``;
 
     return this.db.execute(sql`
       select c.id, c.document_id as "documentId", c.page, c.article, c.content,
              c.embedding <=> ${vector} as distance
       from document_chunks c
       join documents d on d.id = c.document_id
-      where c.embedding is not null and d.owner_id = ${ownerId} ${kindFilter}
+      where c.embedding is not null and d.owner_id = ${ownerId} ${kindFilter} ${tenderFilter}
       order by distance asc
       limit ${k}
     `);
+  }
+
+  /**
+   * One chunk by document and page, for a targeted re-read.
+   * @param {string} documentId
+   * @param {number} page
+   * @returns {Promise<object|undefined>}
+   */
+  async findChunkByPage(documentId, page) {
+    const [row] = await this.db
+      .select()
+      .from(documentChunks)
+      .where(and(eq(documentChunks.documentId, documentId), eq(documentChunks.page, page)))
+      .limit(1);
+    return row;
   }
 }

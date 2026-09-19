@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import AnalysisController from '../../src/controllers/analysis.controller.js';
 
 const UUID = '4e3d9250-2caf-47da-afe6-32b1af32c4db';
+const OWNER = 'owner-1';
+
+/** Every controller reads its owner from the session, never from the body. */
+const asUser = (request) => ({ ...request, user: { id: OWNER } });
 
 /** Minimal fastify reply double: records the status and the payload. */
 function fakeReply() {
@@ -19,16 +23,16 @@ describe('AnalysisController.start', () => {
     const service = { start: vi.fn(async () => ({ runId: 'r1', status: 'queued' })) };
     const reply = fakeReply();
 
-    await new AnalysisController(service).start({ params: { id: UUID } }, reply);
+    await new AnalysisController(service).start(asUser({ params: { id: UUID } }), reply);
 
     expect(reply.statusCode).toBe(202);
-    expect(service.start).toHaveBeenCalledWith(UUID);
+    expect(service.start).toHaveBeenCalledWith(UUID, OWNER);
   });
 
   it('rejects a malformed id before reaching the service', async () => {
     const service = { start: vi.fn() };
     await expect(
-      new AnalysisController(service).start({ params: { id: 'not-a-uuid' } }, fakeReply()),
+      new AnalysisController(service).start(asUser({ params: { id: 'not-a-uuid' } }), fakeReply()),
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED', status: 400 });
 
     expect(service.start).not.toHaveBeenCalled();
@@ -39,7 +43,7 @@ describe('AnalysisController.start', () => {
       start: vi.fn(async () => { throw Object.assign(new Error('nope'), { code: 'TENDER_NOT_FOUND', status: 404 }); }),
     };
     await expect(
-      new AnalysisController(service).start({ params: { id: UUID } }, fakeReply()),
+      new AnalysisController(service).start(asUser({ params: { id: UUID } }), fakeReply()),
     ).rejects.toMatchObject({ code: 'TENDER_NOT_FOUND' });
   });
 });
@@ -50,7 +54,7 @@ describe('AnalysisController.get', () => {
     const reply = fakeReply();
 
     await new AnalysisController({ getByTender: async () => analysis }).get(
-      { params: { id: UUID } },
+      asUser({ params: { id: UUID } }),
       reply,
     );
 
@@ -65,18 +69,18 @@ describe('AnalysisController.saveSection', () => {
     const body = { sectionKey: 'team', title: 'Moyens humains', content: 'Texte corrige.' };
 
     await new AnalysisController(service).saveSection(
-      { params: { runId: UUID }, body },
+      asUser({ params: { runId: UUID }, body }),
       fakeReply(),
     );
 
-    expect(service.saveSectionEdit).toHaveBeenCalledWith(UUID, body);
+    expect(service.saveSectionEdit).toHaveBeenCalledWith(UUID, body, OWNER);
   });
 
   it('rejects an empty correction rather than storing a blank section', async () => {
     const service = { saveSectionEdit: vi.fn() };
     await expect(
       new AnalysisController(service).saveSection(
-        { params: { runId: UUID }, body: { sectionKey: 'team', title: 'T', content: '' } },
+        asUser({ params: { runId: UUID }, body: { sectionKey: 'team', title: 'T', content: '' } }),
         fakeReply(),
       ),
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
@@ -87,7 +91,7 @@ describe('AnalysisController.saveSection', () => {
   it('rejects a body with no sectionKey', async () => {
     await expect(
       new AnalysisController({}).saveSection(
-        { params: { runId: UUID }, body: { title: 'T', content: 'c' } },
+        asUser({ params: { runId: UUID }, body: { title: 'T', content: 'c' } }),
         fakeReply(),
       ),
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });

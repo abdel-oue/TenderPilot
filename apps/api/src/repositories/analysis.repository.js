@@ -2,7 +2,7 @@
  * Analysis Repository
  * ALL analysis run, result and section SQL.
  */
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { analysisResults, analysisRuns, sectionEdits } from '../db/schema/index.js';
 
@@ -111,9 +111,15 @@ export default class AnalysisRepository {
   }
 
   /**
-   * EX-06: a correction is kept AND reused. Upsert on (runId, sectionKey) so a
-   * redraft replaces the agent text while a human edit is what later prompts
-   * read back.
+   * EX-06: a correction is kept AND reused. Upsert on (runId, sectionKey).
+   *
+   * A HUMAN EDIT IS NEVER OVERWRITTEN BY AN AGENT DRAFT. The agent writes with
+   * `editedByHuman: false`, and this method refuses that write when the stored
+   * row is already a human rewrite: the previous version clobbered the human's
+   * text on the very next compliance pass and reset the flag, so a correction
+   * survived exactly until the graph touched the section again. The human always
+   * wins; only another human edit replaces a human edit.
+   *
    * @param {{ runId: string, sectionKey: string, title: string, content: string, editedByHuman: boolean }} values
    * @returns {Promise<object>}
    */
@@ -127,6 +133,8 @@ export default class AnalysisRepository {
       return row;
     }
 
+    if (existing.editedByHuman && !values.editedByHuman) return existing;
+
     const [row] = await this.db
       .update(sectionEdits)
       .set({
@@ -138,5 +146,32 @@ export default class AnalysisRepository {
       .where(eq(sectionEdits.id, existing.id))
       .returning();
     return row;
+  }
+
+  /**
+   * Every human rewrite for a TENDER, across all of its runs, newest first.
+   *
+   * Section edits are keyed on runId, and re-analysing a dossier mints a new run
+   * - so a correction made on Monday was invisible to Tuesday's analysis, which
+   * is not what "la correction est reprise dans les etapes suivantes" means. The
+   * join is the fix: no migration, and a correction now outlives the run it was
+   * made in.
+   *
+   * @param {string} tenderId
+   * @returns {Promise<object[]>}
+   */
+  async findHumanEditsForTender(tenderId) {
+    return this.db
+      .select({
+        sectionKey: sectionEdits.sectionKey,
+        title: sectionEdits.title,
+        content: sectionEdits.content,
+        editedAt: sectionEdits.editedAt,
+        runId: sectionEdits.runId,
+      })
+      .from(sectionEdits)
+      .innerJoin(analysisRuns, eq(analysisRuns.id, sectionEdits.runId))
+      .where(and(eq(analysisRuns.tenderId, tenderId), eq(sectionEdits.editedByHuman, true)))
+      .orderBy(desc(sectionEdits.editedAt));
   }
 }

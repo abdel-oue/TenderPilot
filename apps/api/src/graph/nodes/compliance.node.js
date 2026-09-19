@@ -65,6 +65,10 @@ export async function reviewSections(state) {
 
   // Persist what survived, so the review UI and the DOCX export read from the DB
   // rather than from graph memory.
+  //
+  // `editedByHuman: false` marks these as agent drafts. The repository refuses
+  // to let an agent draft overwrite a stored human rewrite, so re-running the
+  // graph over a reviewed dossier no longer destroys the human's corrections.
   if (state.runId) {
     for (const section of approved) {
       await analyses.upsertSection({
@@ -87,13 +91,21 @@ export async function reviewSections(state) {
 
 /**
  * The conditional edge. Bounded by construction: it can only return 'draft'
- * while at least one section is under the cap.
+ * while a REJECTED section is still under the cap.
+ *
+ * The cap is checked against the rejected sections specifically. Checking it
+ * against every entry in redraftCount - which includes sections that were
+ * approved on the first pass and sit at 0 - made the guard always true, so the
+ * only thing actually bounding the loop was reviewSections emptying `rejected`.
+ * One real bound is worth more than two that look like bounds.
  *
  * @param {import('@tenderpilot/shared').GraphState} state
  * @returns {'draft'|'export'}
  */
 export function shouldRedraft(state) {
-  const pending = (state.rejected ?? []).length > 0;
-  const underCap = Object.values(state.redraftCount ?? {}).some((n) => n <= MAX_REDRAFTS);
-  return pending && underCap ? 'draft' : 'export';
+  const rejected = state.rejected ?? [];
+  const counts = state.redraftCount ?? {};
+  return rejected.some((section) => (counts[section.key] ?? 0) <= MAX_REDRAFTS)
+    ? 'draft'
+    : 'export';
 }

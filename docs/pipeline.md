@@ -169,7 +169,7 @@ Réingérer un document remplace **les chunks de ce document seulement**
 Les pièces du dossier ne sont **pas** plongées : on ne les cherche pas par
 similarité, on les lit page par page.
 
-Sans index, `search_company_docs` ne peut rien renvoyer, et le Writer marque chaque
+Sans index, `search_documents` ne peut rien renvoyer, et le Writer marque chaque
 section `[A COMPLETER PAR L'HUMAIN]`. Le garde-fou est correct, mais il se
 déclencherait faute de matière plutôt que faute de preuve — ce qui n'est pas la
 même chose. D'où `npm run db:index`.

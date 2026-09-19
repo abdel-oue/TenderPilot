@@ -80,15 +80,22 @@ export default class AzureOpenAiService {
   }
 
   /**
-   * One chat completion constrained to a JSON object.
+   * One chat completion constrained to a JSON object, optionally with tools.
    *
    * `json_object` rather than `json_schema`: it is the mode both endpoints
    * implement, and a zod schema is the real contract either way.
    *
-   * @param {{ system: string, user: string, temperature?: number, maxTokens?: number, messages?: object[] }} options
-   * @returns {Promise<{ content: string, usage: object, latencyMs: number, model: string }>}
+   * When `tools` is passed the model may answer with tool calls INSTEAD of
+   * content. That is a normal turn, not an error: the caller executes them and
+   * calls back with the results. `response_format` is dropped on those turns -
+   * a provider asked for JSON while also being offered tools will sometimes
+   * satisfy the format instead of calling the tool, which silently disables the
+   * whole tool belt.
+   *
+   * @param {{ system?: string, user?: string, temperature?: number, maxTokens?: number, messages?: object[], tools?: object[] }} options
+   * @returns {Promise<{ content: string, toolCalls: object[], usage: object, latencyMs: number, model: string }>}
    */
-  async chatJson({ system, user, temperature = 0, maxTokens, messages }) {
+  async chatJson({ system, user, temperature = 0, maxTokens, messages, tools }) {
     const payload = messages ?? [
       { role: 'system', content: system },
       { role: 'user', content: user },
@@ -99,13 +106,23 @@ export default class AzureOpenAiService {
       model: this.model,
       ...(this.supportsTemperature ? { temperature } : {}),
       max_completion_tokens: maxTokens ?? this.maxTokens,
-      response_format: { type: 'json_object' },
+      ...(tools?.length
+        ? { tools, tool_choice: 'auto' }
+        : { response_format: { type: 'json_object' } }),
       messages: payload,
     });
     const latencyMs = Date.now() - startedAt;
 
+    const message = response.choices[0]?.message;
+
     return {
-      content: response.choices[0]?.message?.content ?? '',
+      content: message?.content ?? '',
+      // Normalised to an array so no caller has to null-check it.
+      toolCalls: message?.tool_calls ?? [],
+      // The raw message goes back into the next turn verbatim: an assistant turn
+      // carrying tool_calls MUST be replayed as-is or the provider rejects the
+      // tool results that follow it.
+      message: message ?? null,
       usage: normalizeUsage(response.usage),
       latencyMs,
       model: this.model,

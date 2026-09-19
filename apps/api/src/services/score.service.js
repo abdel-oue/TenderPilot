@@ -43,17 +43,49 @@ export function findBlockers(requirements, matches) {
     })
     .map((r) => {
       const match = byId.get(r.id);
+      const status = match?.status ?? 'unknown';
       return {
         requirementId: r.id,
         text: r.text,
+        status,
         reason:
           match?.reason ??
           "Exigence éliminatoire non évaluée : aucune correspondance trouvée dans le profil.",
+        // The agent's own certainty, carried through so the UI can show the
+        // human which blocker is worth arbitrating first.
+        confidence: typeof match?.confidence === 'number' ? match.confidence : null,
         sourcePage: r.sourcePage ?? null,
         sourceArticle: r.sourceArticle ?? null,
         sourceDocumentId: r.sourceDocumentId ?? null,
       };
-    });
+    })
+    .sort(bySeverity);
+}
+
+/**
+ * Orders blockers worst-first.
+ *
+ * `unmet` outranks `unknown`: a requirement the profile positively fails is a
+ * harder fact than one we could not assess. Within a status, higher confidence
+ * first, then document order.
+ *
+ * This ordering is load-bearing, not cosmetic. The verdict calls blockers[0]
+ * "la plus bloquante" and the UI lists them in order - an unsorted list made
+ * that sentence a claim about whichever requirement happened to be extracted
+ * first, which is a confident statement the data did not support.
+ *
+ * @param {object} a
+ * @param {object} b
+ * @returns {number}
+ */
+function bySeverity(a, b) {
+  const rank = (blocker) => (blocker.status === 'unmet' ? 0 : 1);
+  if (rank(a) !== rank(b)) return rank(a) - rank(b);
+
+  const confidence = (blocker) => (typeof blocker.confidence === 'number' ? blocker.confidence : 0);
+  if (confidence(a) !== confidence(b)) return confidence(b) - confidence(a);
+
+  return (a.sourcePage ?? Number.MAX_SAFE_INTEGER) - (b.sourcePage ?? Number.MAX_SAFE_INTEGER);
 }
 
 /**
@@ -135,13 +167,18 @@ export function verdict(score, blockers, matches = []) {
       : Math.round((confidences.reduce((a, b) => a + b, 0) / confidences.length) * 100) / 100;
 
   if (blockers.length > 0) {
+    // findBlockers sorts worst-first, so this really is the most blocking one.
     const first = blockers[0];
+    const unassessed = first.status === 'unknown';
     return {
       verdict: 'no-go',
       confidence: meanConfidence,
       justification:
         `${blockers.length} exigence(s) éliminatoire(s) non satisfaite(s). ` +
         `La plus bloquante : ${first.text ?? first.label}. ` +
+        (unassessed
+          ? "Elle n'a pas pu être évaluée faute d'information : à trancher par un humain avant d'abandonner. "
+          : '') +
         `Une seule suffit à écarter la candidature, quel que soit le reste du dossier.`,
     };
   }

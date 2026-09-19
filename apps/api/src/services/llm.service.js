@@ -99,6 +99,13 @@ export default class LlmService {
   /**
    * Calls a model and returns a value already parsed by the caller zod schema.
    *
+   * With a `toolkit`, this is the agentic loop: the model is offered tools, may
+   * answer with tool calls instead of content, and the results are fed back until
+   * it answers for real or the round budget runs out. Without one, it is a single
+   * constrained JSON call. Same method, because the schema contract, the usage
+   * accounting and the one-shot repair are identical either way - and a second
+   * near-identical method is how one of them quietly stops being enforced.
+   *
    * @param {object} options
    * @param {string} options.name the agent or node spending the tokens
    * @param {string} options.system
@@ -108,12 +115,13 @@ export default class LlmService {
    * @param {unknown} [options.stub] returned when stub mode is on
    * @param {number} [options.temperature]
    * @param {number} [options.maxTokens]
+   * @param {{ definitions: object[], execute: (name: string, args: object) => Promise<object>, maxRounds?: number, onToolCall?: (call: object) => void }} [options.toolkit]
    * @returns {Promise<unknown>} the parsed value
    */
   async complete(options) {
-    const { name, system, user, schema, tier = TIERS.VOLUME, stub, temperature = 0, maxTokens } = options;
+    const { name, system, user, schema, tier = TIERS.VOLUME, stub, temperature = 0, maxTokens, toolkit } = options;
 
-    if (this.stub) return this.completeFromStub({ name, schema, stub, tier });
+    if (this.stub) return this.completeFromStub({ name, schema, stub, tier, toolkit, user });
 
     const provider = this.providers[tier];
     if (!provider) throw appError('Unknown model tier: ' + tier, 'UNKNOWN_TIER', 500);
@@ -122,6 +130,20 @@ export default class LlmService {
       { role: 'system', content: system },
       { role: 'user', content: user },
     ];
+
+    if (toolkit?.definitions?.length) {
+      const last = await this.runToolLoop({
+        name, tier, provider, messages, toolkit, temperature, maxTokens,
+      });
+
+      // The turn that ended the tool loop already carries the model's answer
+      // more often than not - the system prompt asks for JSON, and the model
+      // stopped calling tools because it was ready to answer. Parsing it here
+      // saves a full reasoning-tier round trip per section. If it is prose, we
+      // fall through and ask for the shape properly, so nothing is lost.
+      const early = last ? schema.safeParse(LlmService.parseJson(last)) : null;
+      if (early?.success) return early.data;
+    }
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       let result;
@@ -185,6 +207,91 @@ export default class LlmService {
   }
 
   /**
+   * The agentic loop. Offers the tools, runs whatever the model asks for, feeds
+   * the results back, and repeats until the model stops calling tools or the
+   * round budget runs out.
+   *
+   * It mutates `messages`: what it produces IS the conversation, and the caller's
+   * schema turn runs against it afterwards. Separating "gather evidence" from
+   * "answer in the required shape" is what stops a tool-calling turn being parsed
+   * as a malformed answer.
+   *
+   * Bounded by `maxRounds`. An unbounded tool loop is a hung worker, and on a
+   * demo it is a hung worker in front of the jury.
+   *
+   * @param {object} options
+   * @returns {Promise<string|null>} the content of the turn that ended the loop,
+   *   which the caller may be able to use as the answer directly
+   */
+  async runToolLoop({ name, tier, provider, messages, toolkit, temperature, maxTokens }) {
+    const maxRounds = toolkit.maxRounds ?? 4;
+
+    for (let round = 1; round <= maxRounds; round += 1) {
+      let result;
+      try {
+        result = await provider.chatJson({
+          messages,
+          temperature,
+          maxTokens,
+          tools: toolkit.definitions,
+        });
+      } catch (error) {
+        // The evidence-gathering phase is best-effort: losing it costs the answer
+        // its citations, which the Writer already handles by marking the section
+        // for a human. Failing the whole call here would be worse.
+        logger.warn({ name, round, err: error.message }, 'llm: tool round failed');
+        return null;
+      }
+
+      await this.recordUsage({
+        tier,
+        model: result.model,
+        operation: name + ':tools',
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        latencyMs: result.latencyMs,
+        status: 'ok',
+      });
+
+      if (result.toolCalls.length === 0) {
+        // Nothing more to look up. Hand the content back: the caller tries it as
+        // the answer before spending another call asking for the same thing.
+        return result.content || null;
+      }
+
+      // Replayed verbatim: a provider rejects tool results whose originating
+      // assistant turn is missing or reworded.
+      messages.push(result.message);
+
+      for (const call of result.toolCalls) {
+        const args = LlmService.parseJson(call.function?.arguments ?? '{}') ?? {};
+        const output = await toolkit.execute(call.function?.name, args);
+
+        toolkit.onToolCall?.({ tool: call.function?.name, args, result: output });
+        logger.info({ name, round, tool: call.function?.name, args }, 'llm: tool call');
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(output).slice(0, 8000),
+        });
+      }
+    }
+
+    // Budget spent. Say so in the transcript rather than letting the model keep
+    // waiting for a tool result that will never arrive.
+    logger.warn({ name, maxRounds }, 'llm: tool budget exhausted');
+    messages.push({
+      role: 'user',
+      content:
+        'Budget d outils epuise. Reponds maintenant avec ce que tu as, et marque ' +
+        "explicitement ce que tu n'as pas pu verifier.",
+    });
+    return null;
+  }
+
+  /**
    * Embeds text for pgvector search. Embeddings are computed once and stored;
    * nothing re-indexes per request.
    * @param {string[]} inputs
@@ -228,9 +335,19 @@ export default class LlmService {
    * @param {{ name: string, schema: import('zod').ZodType, stub: unknown, tier: string }} options
    * @returns {Promise<unknown>}
    */
-  async completeFromStub({ name, schema, stub, tier }) {
+  async completeFromStub({ name, schema, stub, tier, toolkit, user }) {
     if (stub === undefined) {
       throw appError('STUB_LLM is on but ' + name + ' has no stub', 'MISSING_STUB', 500);
+    }
+
+    // Stub mode still exercises the tool path: it fires the toolkit's declared
+    // probe so the repositories, the owner scoping and the trace are all really
+    // executed offline. A stub that skips the tools would let the belt rot
+    // untested, which is exactly how it rotted before.
+    if (toolkit?.definitions?.length && toolkit.stubCall) {
+      const { tool, args } = toolkit.stubCall(user);
+      const output = await toolkit.execute(tool, args);
+      toolkit.onToolCall?.({ tool, args, result: output });
     }
     const parsed = schema.safeParse(stub);
     if (!parsed.success) {

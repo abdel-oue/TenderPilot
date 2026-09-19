@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Which kinds belong to a DOSSIER and which belong to the COMPANY. The split is
 // not cosmetic: a tender document is what gets analysed, a company document is
-// what the Writer searches to cite a real reference (search_company_docs).
+// what the Writer searches to cite a real reference (search_documents).
 export const TENDER_DOCUMENT_KINDS = ['avis', 'cps', 'reglement', 'bpu', 'planning'];
 export const COMPANY_DOCUMENT_KINDS = ['attestation', 'memoire', 'profil'];
 export const DOCUMENT_KINDS = [...TENDER_DOCUMENT_KINDS, ...COMPANY_DOCUMENT_KINDS];

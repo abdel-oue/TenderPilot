@@ -16,11 +16,24 @@ export const extractedPageSchema = z.object({
   extraction: z.enum(['text_layer', 'ocr', 'unread']),
 });
 
+/** One tool call, as the interface shows it. */
+export const toolNarrationSchema = z.object({
+  name: z.string(),
+  raison: z.string().nullable(),
+  outcome: z.string(),
+});
+
 export const traceEntrySchema = z.object({
   node: z.string(),
   at: z.string(),
   summary: z.string(),
   status: z.enum(['ok', 'error', 'retry']),
+  ms: z.number().optional(),
+  // Which tools the agent chose to call on this step, each with the model's own
+  // reason for calling it and a plain-French description of what came back.
+  // This is the evidence that the belt is real rather than declared, so it
+  // travels with the trace.
+  tools: z.array(toolNarrationSchema).optional(),
 });
 
 export const graphStateSchema = z.object({

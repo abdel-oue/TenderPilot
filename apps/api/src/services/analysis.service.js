@@ -88,9 +88,14 @@ export default class AnalysisService {
         const state = await graph.invoke(
           { tenderId, runId, ownerId },
           {
-            // Keyed on the graph version so a checkpoint from an older graph is
+            // Keyed on the RUN, plus the graph version.
+            //
+            // runId is what makes this correct: every start() mints a new run, so
+            // a thread keyed on the tender alone meant a re-analysis resumed the
+            // PREVIOUS run's finished checkpoint instead of running. The version
+            // is still in the key so a checkpoint from an older graph shape is
             // never resumed into a newer one.
-            configurable: { thread_id: `${tenderId}:${GRAPH_VERSION}` },
+            configurable: { thread_id: `${tenderId}:${runId}:${GRAPH_VERSION}` },
             recursionLimit: 25,
           },
         );

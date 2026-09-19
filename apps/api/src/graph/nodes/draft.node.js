@@ -51,11 +51,15 @@ export async function draft(state) {
   }
 
   // Sections a human already rewrote, so later sections align with them.
-  const saved = state.runId ? await analyses.findSections(state.runId) : [];
-  const humanEdits = saved.filter((s) => s.editedByHuman);
+  // Scoped to the TENDER, not to this run: re-analysing mints a new runId, and a
+  // correction that only survived inside one run was not actually reused.
+  const humanEdits = state.tenderId
+    ? await analyses.findHumanEditsForTender(state.tenderId)
+    : [];
 
   const sections = [];
   const errors = [];
+  const toolCalls = [];
 
   for (const section of plan) {
     // A section sent back by Compliance carries its instructions; a fresh one
@@ -75,6 +79,7 @@ export async function draft(state) {
         needsHuman: drafted.needsHuman,
         toolCalls: drafted.toolCalls,
       });
+      toolCalls.push(...drafted.toolCalls.map((call) => ({ ...call, section: section.key })));
     } catch (error) {
       errors.push({ node: 'draft', message: section.key + ': ' + error.message });
       logger.error({ section: section.key, err: error.message }, 'draft: failed');
@@ -86,5 +91,5 @@ export async function draft(state) {
     'draft: done',
   );
 
-  return { sections, errors };
+  return { sections, errors, toolCalls };
 }

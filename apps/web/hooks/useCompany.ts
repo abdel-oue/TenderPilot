@@ -23,7 +23,7 @@ export function useImportCompanyProfile() {
 
 /**
  * Uploading here is what makes a document citable: the api queues it for OCR and
- * embedding on arrival, which is what search_company_docs reads.
+ * embedding on arrival, which is what search_documents reads.
  */
 export function useUploadCompanyDocument() {
   const queryClient = useQueryClient();

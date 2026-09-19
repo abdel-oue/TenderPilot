@@ -44,8 +44,19 @@ describe('shouldRedraft (the compliance refusal edge)', () => {
     expect(hops).toBeLessThanOrEqual(MAX_REDRAFTS + 1);
   });
 
-  it('treats a missing redraftCount as a fresh section rather than crashing', () => {
-    expect(shouldRedraft({ rejected: [{ key: 'team' }] })).toBe('export');
+  it('sends a freshly rejected section back to the Writer', () => {
+    // A rejection with no recorded attempt is a first refusal, and a first
+    // refusal is exactly what the revision loop exists for. The previous
+    // assertion expected 'export' here, which described the old guard's bug -
+    // it read every entry in redraftCount, including approved sections sitting
+    // at zero, so it never actually bounded anything.
+    expect(shouldRedraft({ rejected: [{ key: 'team' }] })).toBe('draft');
+  });
+
+  it('stops redrafting a section that has used up its attempts', () => {
+    expect(
+      shouldRedraft({ rejected: [{ key: 'team' }], redraftCount: { team: MAX_REDRAFTS + 1 } }),
+    ).toBe('export');
   });
 });
 
@@ -83,5 +94,20 @@ describe('summarize (what the trace panel and the video show)', () => {
   it('never throws on an empty patch', () => {
     expect(() => summarize('decide', {})).not.toThrow();
     expect(() => summarize('unknown-node')).not.toThrow();
+  });
+});
+
+describe('trace narration', () => {
+  it('counts the tool calls in the node summary', () => {
+    const summary = summarize('draft', {
+      sections: [{}, {}],
+      toolCalls: [{ tool: 'search_documents' }, { tool: 'calculate' }],
+    });
+    expect(summary).toContain('2 sections redigees');
+    expect(summary).toContain("2 appel(s) d'outil");
+  });
+
+  it('says nothing about tools on a node that called none', () => {
+    expect(summarize('draft', { sections: [{}] })).toBe('1 sections redigees');
   });
 });

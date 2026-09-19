@@ -24,6 +24,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { env } from '../lib/env.js';
 import { logger } from '../lib/logger.js';
+import { describeToolCall } from '../lib/narration.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
 import { ingest } from './nodes/ingest.node.js';
 import { extractRequirementsNode } from './nodes/extractRequirements.node.js';
@@ -72,6 +73,10 @@ const channels = {
   // earlier node already reported.
   errors: append,
   nodeTrace: append,
+  // Every tool the agents actually called, in order. This is the evidence that
+  // the belt is real rather than declared: the trace panel renders it, and it is
+  // what the jury is asking to see when it asks to see the reasoning.
+  toolCalls: append,
 };
 
 /**
@@ -95,6 +100,7 @@ function traced(name, fn, analyses) {
         summary: summarize(name, patch),
         status: 'ok',
         ms: Date.now() - startedAt,
+        tools: narrate(patch.toolCalls),
       };
       if (state.runId) await analyses.appendTrace(state.runId, entry).catch(() => {});
       return { ...patch, nodeTrace: [entry] };
@@ -113,6 +119,26 @@ function traced(name, fn, analyses) {
       return { errors: [{ node: name, message: error.message }], nodeTrace: [entry] };
     }
   };
+}
+
+/**
+ * Turns the raw tool calls of one node into rows a company director can read.
+ *
+ * Three fields, and the split is the point: `raison` is the model's own words
+ * for why it reached for the tool, `outcome` is built from what the tool really
+ * returned and cannot be hallucinated, and `name` is kept so a technical reader
+ * can still see which named tool ran. The dirigeant reads the first two; the
+ * jury checks the third.
+ *
+ * @param {{ tool: string, args: object, result: object }[]} [toolCalls]
+ * @returns {{ name: string, raison: string|null, outcome: string }[]}
+ */
+function narrate(toolCalls = []) {
+  return toolCalls.map((call) => ({
+    name: call.tool,
+    raison: call.args?.raison ?? null,
+    outcome: describeToolCall(call.tool, call.args ?? {}, call.result ?? {}),
+  }));
 }
 
 /**
@@ -137,14 +163,24 @@ export function summarize(name, patch = {}) {
       return `${(patch.requirements ?? []).filter((r) => r.obligation === 'eliminatoire').length} exigences eliminatoires identifiees`;
     case 'parseRubric':
       return `grille de notation : ${(patch.rubric ?? []).length} criteres`;
-    case 'matchProfile':
-      return `${(patch.matches ?? []).filter((m) => m.status === 'met').length}/${(patch.matches ?? []).length} exigences couvertes par le profil`;
+    case 'matchProfile': {
+      const tools = (patch.toolCalls ?? []).length;
+      return (
+        `${(patch.matches ?? []).filter((m) => m.status === 'met').length}/${(patch.matches ?? []).length} exigences couvertes par le profil` +
+        (tools ? ` (${tools} appel(s) d'outil)` : '')
+      );
+    }
     case 'computeScore':
       return `score de couverture : ${patch.score}/100`;
     case 'decide':
       return `${patch.verdict} - ${(patch.blockers ?? []).length} point(s) bloquant(s)`;
-    case 'draft':
-      return `${(patch.sections ?? []).length} sections redigees`;
+    case 'draft': {
+      const tools = (patch.toolCalls ?? []).length;
+      return (
+        `${(patch.sections ?? []).length} sections redigees` +
+        (tools ? `, ${tools} appel(s) d'outil` : '')
+      );
+    }
     case 'compliance':
       return `${(patch.sections ?? []).length} sections validees, ${(patch.rejected ?? []).length} refusees`;
     default:

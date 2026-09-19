@@ -45,27 +45,40 @@ export default class TavilyService {
   }
 
   /**
+   * `fullContent` is part of the key, not just part of the request: without it a
+   * call asking for whole pages is served the snippet-only response cached from
+   * an earlier call, and the agent silently reasons over truncated evidence while
+   * believing it has the full text.
+   *
    * @param {string} query
    * @param {number} maxResults
+   * @param {boolean} fullContent
    * @returns {string} cache key
    */
-  static cacheKey(query, maxResults) {
-    return createHash('sha256').update(query + '|' + maxResults).digest('hex');
+  static cacheKey(query, maxResults, fullContent = false) {
+    return createHash('sha256')
+      .update(query + '|' + maxResults + '|' + (fullContent ? 'raw' : 'snippet'))
+      .digest('hex');
   }
 
   /**
    * Searches the web. Always resolves.
    *
+   * `fullContent` asks Tavily for the pages' raw text instead of snippets. It is
+   * a flag on this request rather than a separate fetch_url tool: Tavily already
+   * fetches the page, so reading it back through our own HTTP client would buy
+   * nothing and cost an SSRF allowlist, a size ceiling and an HTML sanitiser.
+   *
    * @param {string} query
-   * @param {{ maxResults?: number, depth?: 'basic'|'advanced' }} [options]
+   * @param {{ maxResults?: number, depth?: 'basic'|'advanced', fullContent?: boolean }} [options]
    * @returns {Promise<{ results: { title: string, url: string, content: string, score: number }[], answer: string|null, degraded: boolean }>}
    */
-  async search(query, { maxResults = 5, depth = 'basic' } = {}) {
+  async search(query, { maxResults = 5, depth = 'basic', fullContent = false } = {}) {
     if (!this.isEnabled) {
       return { results: [], answer: null, degraded: true };
     }
 
-    const key = TavilyService.cacheKey(query, maxResults);
+    const key = TavilyService.cacheKey(query, maxResults, fullContent);
     if (this.cache.has(key)) return this.cache.get(key);
 
     let payload;
@@ -81,6 +94,7 @@ export default class TavilyService {
           max_results: maxResults,
           search_depth: depth,
           include_answer: true,
+          include_raw_content: fullContent,
         }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -100,7 +114,9 @@ export default class TavilyService {
       results: (payload.results ?? []).map((r) => ({
         title: r.title ?? '',
         url: r.url ?? '',
-        content: r.content ?? '',
+        // raw_content when the caller asked for whole pages, capped: a 200 KB
+        // page pushed into a prompt is a context overflow, not evidence.
+        content: (fullContent ? (r.raw_content ?? r.content) : r.content ?? '').slice(0, 6000),
         score: typeof r.score === 'number' ? r.score : 0,
       })),
       answer: payload.answer ?? null,

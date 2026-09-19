@@ -37,17 +37,22 @@ export async function matchProfile(state) {
   }
 
   try {
-    const { matches } = await matcher.match(state.requirements, { profile, references, team });
+    const { matches, toolCalls } = await matcher.match(
+      state.requirements,
+      { profile, references, team },
+      { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId },
+    );
     logger.info(
       {
         matched: matches.length,
         met: matches.filter((m) => m.status === 'met').length,
         unmet: matches.filter((m) => m.status === 'unmet').length,
         unknown: matches.filter((m) => m.status === 'unknown').length,
+        toolCalls: toolCalls.length,
       },
       'matchProfile: done',
     );
-    return { matches };
+    return { matches, toolCalls };
   } catch (error) {
     logger.error({ err: error.message }, 'matchProfile: failed');
     return { matches: [], errors: [{ node: 'matchProfile', message: error.message }] };
