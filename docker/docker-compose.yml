@@ -5,9 +5,16 @@
 # resolves against - so the build context is `..`, the repo root, which is what
 # both images need (web and api both import packages/shared).
 #
-# `.env` lives at the repo root, not here, so it is passed explicitly:
-#   docker compose -f docker/docker-compose.yml --env-file .env up -d --build
-# `npm run up` is that line. From inside docker/, use `--env-file ../.env`.
+# `.env` lives at the repo root, not here, so it is passed explicitly - and a
+# SECOND env file follows it, because Compose lets the last one win:
+#   docker compose -f docker/docker-compose.yml --env-file .env --env-file docker/.env.local up -d --build
+# `npm run up` is that line, preceded by `node scripts/localSecrets.mjs`, which
+# writes docker/.env.local the first time with a POSTGRES_PASSWORD and JWT_SECRET
+# generated for THIS machine. Compose has no generator of its own, so that is
+# where the randomness lives; the file is gitignored and per-installation, so no
+# two people - and not production - share a database password.
+#   `npm run up:vps` deliberately passes only `--env-file .env`: on the server
+# that file holds the real credentials and nothing should override them.
 
 name: tenderpilot
 
@@ -16,6 +23,10 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
+      # Locally this is the value generated into docker/.env.local, not the one
+      # in .env. Postgres only applies it while initialising an EMPTY volume: on
+      # an existing pgdata it keeps the old password and the api dies on 28P01.
+      # The README's ALTER USER line realigns the role without losing the data.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:

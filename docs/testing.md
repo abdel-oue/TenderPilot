@@ -181,6 +181,22 @@ npm run lint
 npm run build            # Next.js ; l'api n'a pas d'étape de build, c'est du JS
 ```
 
+## Intégration continue
+
+`.github/workflows/ci.yml` rejoue exactement cette liste sur chaque push et chaque
+pull request, avec `npm run test:e2e` en plus, et téléverse le rapport Playwright
+si quelque chose casse. Un seul job, chromium seul (les deux projets Playwright
+tournent dessus), vingt minutes de plafond.
+
+Le workflow ne lit aucun secret et n'en a pas besoin : `apps/api/tests/setup.js`
+pointe chaque URL externe vers un port mort et force `STUB_LLM=1`, et les tests
+navigateur interceptent l'api au niveau réseau. **Rien dans ce fichier ne doit être
+rendu dépendant d'un secret** — le jour où ça arrive, les forks et les pull
+requests externes cessent d'être vérifiables.
+
+Il ne déploie rien : le VPS est mis à jour à la main avec `npm run up:vps`, et le
+web est construit par Vercel sur son intégration Git.
+
 Ne pas commiter avec un test en échec ou une vérification de types en échec.
 Committer reste la décision de l'humain : le travail fini attend dans l'arbre de
 travail.

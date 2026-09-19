@@ -1,0 +1,72 @@
+# The gate. Nothing is deployed from here - the api is brought up on the VPS with
+# `npm run up:vps` and the web is built by Vercel - so this workflow exists to say
+# whether the commit those two would pick up is green.
+#
+# It contacts no provider and no database: apps/api/tests/setup.js points every
+# external URL at a dead port and sets STUB_LLM=1, and the browser tests intercept
+# the api at the network layer. So CI needs no secrets, which is why none are read
+# here. Nothing in this file may be made to depend on one.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matches the engines field in the root package.json.
+          node-version: "22.11"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # The corpus under apps/api/src/db/seed/data is gitignored and therefore
+      # absent on a runner. Nothing in the default suite reads it - no test
+      # imports db/seed - so the suite is complete without it.
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Install Playwright chromium
+        # Both projects (desktop and mobile emulation) run on chromium; pulling
+        # firefox and webkit would double the step for nothing.
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      # Starts its own Next server on 127.0.0.1:3101 (see playwright.workspace.config.ts)
+      # and mocks every api call. `smoke.spec.ts` is not in this suite: it is the
+      # only spec that wants the real stack and the real model.
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            test-results
+          retention-days: 7
+
+      # Last, because it is the slowest and the least likely to catch what the
+      # tests did not. NEXT_PUBLIC_API_URL is baked in at build time; the default
+      # in lib/api/client.ts is enough to prove the bundle compiles.
+      - name: Production build
+        run: npm run build

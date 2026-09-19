@@ -42,7 +42,9 @@ const envSchema = z.object({
   // the model can call and get an exception from.
   TAVILY_API_KEY: z.string().optional(),
 
-  OCR_LANG: z.string().min(2).default('fra'),
+  // Tesseract language packs, '+'-joined. Both are installed in the api image:
+  // the dossiers are French, but annexes and standards quote English.
+  OCR_LANG: z.string().min(2).default('fra+eng'),
 
   // Where uploaded PDFs land. Relative values resolve against the repo root
   // (see lib/uploads.js) so dev and container agree without a second variable.

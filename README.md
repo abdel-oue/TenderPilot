@@ -20,6 +20,13 @@ cp .env.example .env     # remplir les clés modèle
 npm run up
 ```
 
+`npm run up` commence par écrire `docker/.env.local`, une fois : un mot de passe
+Postgres et un `JWT_SECRET` tirés au sort **pour cette installation**. Le fichier
+est gitignoré, Compose le lit après `.env` et le dernier gagne, donc deux machines
+ne partagent jamais le même mot de passe de base — et aucune ne reprend celui de
+la production. `.env` reste le fichier des clés modèle, et c'est le seul que
+`npm run up:vps` lit sur le serveur.
+
 → interface `http://localhost:4100` · api `http://localhost:4000`
 → compte de démonstration `demo@tenderpilot.local` / `demo1234`
 
@@ -51,9 +58,10 @@ Les deux hôtes partagent le domaine `ouedghiri.dev`, donc le cookie de session
 reste `SameSite=Lax` : les appels du front vers l'api sont *same-site*. Un front
 sur une URL `*.vercel.app` casserait ça.
 
-Si `POSTGRES_PASSWORD` change dans `.env` après la première création du volume,
-Postgres garde l'ancien mot de passe et l'api démarre sur `migrations failed`
-(`28P01`). Aligner le rôle, sans toucher aux données :
+Postgres ne lit `POSTGRES_PASSWORD` qu'en initialisant un volume vide. Si la
+valeur change ensuite — dans `.env`, ou dans un `docker/.env.local` régénéré —
+Postgres garde l'ancienne et l'api démarre sur `migrations failed` (`28P01`).
+Aligner le rôle, sans toucher aux données :
 
 ```bash
 docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot   -c "ALTER USER tenderpilot WITH PASSWORD '<valeur de .env>'"
@@ -311,8 +319,21 @@ npm test          # sans réseau ni base de données
 Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.
 
 **Dernier passage global documenté au 19/09/2026 : 273 tests passent, 0 échoue**
-(24 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
+(25 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
 au cloisonnement par compte (migration `0004_owner_scoping`) : les tests ont été
 remis à la signature réelle, pas contournés. Ce résultat global est distinct des
 vérifications frontend ci-dessus. `npm run test:e2e` lance la vitrine et l'espace
 de travail avec API simulée. Détail dans [docs/testing.md](docs/testing.md).
+
+### Intégration continue
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) rejoue la même séquence sur
+chaque push et chaque pull request : `npm ci`, `npm run lint`, `npm test`,
+`npm run test:e2e`, `npm run build`. En cas d'échec le rapport Playwright est
+téléversé en artefact.
+
+Le workflow ne déploie rien et **ne lit aucun secret** : le suite de tests pointe
+ses URL externes vers un port mort et force `STUB_LLM=1`, et les tests navigateur
+interceptent l'api. Le déploiement reste manuel — `npm run up:vps` sur le VPS pour
+l'api, l'intégration Git de Vercel pour le web — et ce fichier sert à dire si le
+commit qu'ils ramasseraient est vert.

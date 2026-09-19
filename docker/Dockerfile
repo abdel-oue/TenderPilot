@@ -42,7 +42,7 @@ WORKDIR /app
 
 # pdftoppm (poppler) rasterizes the scanned dossiers, tesseract reads them.
 # AO-2026-004 and AO-2026-009 have no text layer at all, so this is not optional.
-RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-fra
+RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-fra tesseract-ocr-data-eng
 
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
