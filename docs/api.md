@@ -14,20 +14,28 @@ Base locale : `http://localhost:4000`. Toutes les réponses sont en JSON sauf
 | `VALIDATION_FAILED` | 400 | le corps ou le paramètre n'a pas passé zod |
 | `UPLOAD_MISSING` | 400 | requête multipart sans fichier |
 | `UPLOAD_EMPTY` | 400 | fichier de zéro octet |
+| `INVALID_CHOICE` | 400 | la réponse humaine ne figure pas dans les options proposées |
+| `UNKNOWN_BLOCKER` | 400 | un identifiant écarté ne désigne pas un bloquant du résultat courant |
 | `INVALID_CREDENTIALS` | 401 | e-mail ou mot de passe faux |
 | `UNAUTHORIZED` | 401 | session absente ou expirée |
 | `TENDER_NOT_FOUND` | 404 | l'appel d'offres n'existe pas |
 | `DOCUMENT_NOT_FOUND` | 404 | le document n'existe pas |
+| `SECTION_NOT_FOUND` | 404 | la section à corriger n'existe pas sur ce run |
+| `NOT_FOUND` | 404 | route inconnue |
 | `ANALYSIS_NOT_FOUND` | 404 | aucune analyse pour cet appel d'offres |
 | `EMAIL_TAKEN` | 409 | e-mail déjà utilisé |
 | `NOTHING_TO_EXPORT` | 409 | aucune section rédigée (un no-go n'est pas rédigé) |
 | `NO_PENDING_QUESTION` | 409 | on répond à un run qui n'attend rien |
 | `STALE_QUESTION` | 409 | on répond à une question que le run a déjà passée |
+| `RUN_NOT_REVIEWABLE` | 409 | le run n'est pas arbitrable : version de graphe périmée ou run inachevé |
+| `CHECKPOINT_UNAVAILABLE` | 409 | aucun point de reprise pour ce run |
 | `DOCUMENT_FILE_MISSING` | 410 | le PDF n'est pas sur le disque (corpus non monté) |
 | `UPLOAD_TOO_LARGE` | 413 | fichier au-dessus de `MAX_UPLOAD_MB` |
 | `UPLOAD_NOT_PDF` | 415 | les octets ne commencent pas par `%PDF` |
 | `SCHEMA_VALIDATION_FAILED` | 502 | le modèle n'a pas produit la forme attendue après une reprise |
 | `LLM_REQUEST_FAILED` | 502 | le fournisseur n'a pas répondu |
+| `INTERNAL_ERROR` | 500 | erreur non rattrapée ; le détail est dans les journaux, jamais dans la réponse |
+| `DEMO_UNAVAILABLE` | 503 | `POST /auth/demo` sans jeu de données semé |
 
 ---
 
@@ -138,8 +146,9 @@ Le dossier et ses documents.
 }
 ```
 
-`extractionPath` vaut `text_layer` ou `ocr` — c'est ainsi qu'on sait qu'un dossier
-était un scan.
+`extractionPath` vaut `pending` avant lecture, puis `text_layer`, `ocr` ou
+`mixed` — c'est ainsi qu'on sait qu'un dossier était un scan, entier ou par
+annexes.
 
 ### `GET /tenders/:id/requirements`
 
@@ -246,7 +255,7 @@ direct, une analyse échouée montre jusqu'où elle est allée.
 {
   "runId": "99dc9df5-...",
   "status": "done",
-  "graphVersion": "v1",
+  "graphVersion": "v4",
   "nodeTrace": [
     { "node": "ingest", "at": "...", "summary": "4 pages lues, dont 4 par OCR", "status": "ok", "ms": 34042 },
     { "node": "decide", "at": "...", "summary": "go - 0 point(s) bloquant(s)", "status": "ok", "ms": 2 }
@@ -369,7 +378,7 @@ porte pas de propriétaire.
 
 ```json
 { "runs": [{ "runId": "…", "tenderId": "…", "reference": "AO-2026-002",
-  "title": "Audit…", "status": "done", "graphVersion": "v1",
+  "title": "Audit…", "status": "done", "graphVersion": "v4",
   "startedAt": "…", "finishedAt": "…", "durationMs": 69000, "error": null,
   "awaiting": false, "steps": 9, "totalTokens": 38210, "calls": 12 }] }
 ```

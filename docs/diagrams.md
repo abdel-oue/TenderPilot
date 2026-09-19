@@ -73,7 +73,7 @@ flowchart LR
     redis[("<b>redis</b> 7<br/>BullMQ<br/>:6379")]
   end
 
-  azure["Azure OpenAI<br/>raisonnement · volume · embeddings"]
+  azure["Numeos (raisonnement + embeddings)<br/>Azure OpenAI (volume)"]
   tavily["Tavily<br/>outil web_search"]
 
   user -->|HTTP| web
@@ -84,11 +84,11 @@ flowchart LR
   worker --> pg
   worker --> azure
   worker --> tavily
-  api --> azure
 ```
 
 Le `web` n'appelle jamais un modèle et ne touche jamais la base. L'`api` ne fait
-jamais tourner le graphe : elle valide, écrit, met en file.
+jamais tourner le graphe **et n'appelle jamais un fournisseur de modèle** : elle
+valide, écrit, met en file. Tout appel modèle part du `worker`.
 
 ## 3. Couches côté api
 
@@ -148,8 +148,10 @@ flowchart LR
   comp -->|validé| DONE([Dossier prêt])
 ```
 
-Les deux bornes vivent dans la condition d'arête (`shouldDraft`, `shouldRedraft`),
-jamais dans un prompt. Détail des nœuds : [agents.md](agents.md).
+Les trois arêtes conditionnelles sont évaluées par `shouldDraft` (deux fois :
+après `decide`, puis après `reconcileDecision`) et `shouldRedraft`. Les bornes
+vivent dans ces conditions, jamais dans un prompt. Détail des nœuds :
+[agents.md](agents.md).
 
 ## 5. Séquence : lancer une analyse
 
@@ -162,7 +164,7 @@ sequenceDiagram
   participant R as redis
   participant K as worker
   participant P as postgres
-  participant L as Azure OpenAI
+  participant L as Numeos · Azure OpenAI
 
   U->>W: clic « Analyser »
   W->>A: POST /tenders/:id/analyze
@@ -227,7 +229,7 @@ flowchart LR
     bytes -->|non| ko["415 UPLOAD_NOT_PDF"]
     bytes -->|oui| size{"taille ≤ MAX_UPLOAD_MB ?"}
     size -->|non| ko2["413 UPLOAD_TOO_LARGE"]
-    size -->|oui| store["uploads/user/sha256.pdf<br/>upsert sur (owner_id, content_hash)"]
+    size -->|oui| store["uploads/owner/[tender ou company]/sha256.pdf<br/>upsert sur (owner_id, content_hash)"]
     store --> idx["file <b>index</b><br/>IndexingService<br/><i>tout dépôt</i>"]
     store --> route{"tender_id ?"}
     route -->|défini| ana["file <b>analysis</b><br/>le graphe, au lancement<br/>de l'analyse"]
@@ -240,7 +242,7 @@ flowchart LR
     cache -->|miss| pages["unpdf : une entrée par page"]
     pages --> read{"isReadablePage ?"}
     read -->|oui| tl["extraction = text_layer"]
-    read -->|non| ocr["pdftoppm 200 dpi<br/>puis tesseract -l fra"]
+    read -->|non| ocr["pdftoppm 200 dpi<br/>puis tesseract -l OCR_LANG"]
     ocr --> read2{"relu lisible ?"}
     read2 -->|oui| o["extraction = ocr"]
     read2 -->|non| u["extraction = unread<br/>la page reste une ligne"]
@@ -319,7 +321,7 @@ erDiagram
     uuid id PK
     uuid tender_id FK
     text graph_version
-    text status "queued|running|done|failed"
+    text status "queued|running|awaiting_human|done|failed"
     jsonb node_trace
   }
   analysis_results {

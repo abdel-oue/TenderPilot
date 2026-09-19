@@ -19,7 +19,8 @@ Ce dossier n'a aucune couche texte : les quatre pages passent par l'OCR.
 [ok] decide               go - 0 point(s) bloquant(s)               2ms
 [ok] draft                4 sections redigees, 7 appels d'outil
                           search_documents · calculate          25920ms
-[ok] compliance           4 sections validees, 0 refusees        8785ms
+[ok] compliance           4 sections controlees, 0 a revoir,
+                          0 refusees                            8785ms
 ```
 
 Cette trace vit dans `analysis_runs.node_trace` : elle survit à un

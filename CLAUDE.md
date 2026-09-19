@@ -27,7 +27,10 @@ tenderpilot/
 │   ├── Dockerfile                # targets: api (worker reuses it), web
 │   ├── init.sql
 │   ├── docker-compose.yml        # paths relative to docker/, context is `..`
-│   └── docker-compose.dev.yml
+│   ├── docker-compose.dev.yml    # bind-mounts src/ for `npm run up:dev`
+│   └── docker-compose.vps.yml    # parks `web` (Vercel hosts it) for `npm run up:vps`
+├── docs/                         # the documentation the README maps, + nginx vhost
+├── vitest.config.js              # one runner, two projects: api (.js), web (.ts)
 ├── apps/
 │   ├── web/                      # Next.js
 │   │   ├── app/                  # routes, page.tsx / layout.tsx
@@ -75,17 +78,20 @@ and is updated whenever a new env var is introduced.
 ## Fixture data
 
 The corpus lives at `apps/api/src/db/seed/data/` — beside the seed that consumes it — and is
-**gitignored**: not in the repo, dropped in locally. 10 tender PDFs (`AO-2026-004` and `-009`
-are pure scans, OCR required), the company profile as PDF + JSON, `references.csv`,
-`equipe.csv`, 4 attestations, 2 past technical memos. Generated from a fixed seed, so it is
-identical on every machine.
+**committed**: a fresh clone already has it, so `npm run up` needs nothing but `.env`. 10
+tender PDFs (`AO-2026-004` and `-009` are pure scans, OCR required), the company profile as
+PDF + JSON, `references.csv`, `equipe.csv`, 4 attestations, 2 past technical memos, and
+`README-jeux-de-donnees.md` describing them. Generated from a fixed seed, so it is identical
+on every machine. It is `.dockerignore`d and bind-mounted into the api and worker containers
+rather than baked into the image.
 
 - Read-only. Never rewrite, regenerate, or reformat a file under `seed/data/`.
 - Parsed/derived artefacts go to the DB or a gitignored cache dir, never back into `seed/data/`.
 - The seed resolves it relative to its own module (`import.meta.dirname`), never from `cwd` —
   it runs from the repo root in dev and from `/app` in the container.
 - Keyed on the stable ids in the dataset (`REF-01`, `CV-01`, …).
-- A fresh clone needs the corpus copied in before `db:seed` does anything.
+- Read it from git, never re-export it: the committed bytes are what the tests and the
+  demo account assume.
 
 ---
 
@@ -270,7 +276,8 @@ is also the only thing standing in for a type checker, so it is not optional any
 The seed exists so a fresh clone has the company profile, the sample tender, and enough data
 to demo. It must never be able to nuke work.
 
-- Seed lives in `apps/api/src/db/seed/`, entry point `index.ts`, data files beside it.
+- Seed lives in `apps/api/src/db/seed/`, entry point `index.js` (JavaScript, like the rest
+  of the api), `reset.js` beside it, data files in `data/`.
 - **Idempotent by default.** Every insert is an upsert on a stable business key
   (`onConflictDoNothing` / `onConflictDoUpdate`). Running the seed five times leaves the same
   rows as running it once.

@@ -3,19 +3,26 @@
  *
  *   ingest -> extractRequirements -> classifyRequirements -> parseRubric
  *          -> matchProfile -> computeScore -> decide -[no-go]-> END
- *                                            \-[go]---> draft -> compliance
- *                                                         ^         |
- *                                                         \--refus--/  (max 2)
+ *                                            \-[go]---> draft -> reconcileDecision
+ *                                                                  -[no-go]-> END
+ *                                                                  -[go]----> compliance
+ *                                                         ^                       |
+ *                                                         \-------- refus --------/  (max 2)
  *
- * Two conditional edges, and they are the whole point:
+ * Three conditional edges, and they are the whole point:
  *
- *   decide     a no-go stops before drafting. Writing a memoire for a dossier the
- *              company is disqualified from is the expensive mistake this product
- *              exists to prevent, and burning tokens on it would be ironic.
- *   compliance a refused section goes BACK to the Writer. That cycle is the
- *              "reviser" verb of the agentic-depth criterion.
+ *   decide             a no-go stops before drafting. Writing a memoire for a
+ *                      dossier the company is disqualified from is the expensive
+ *                      mistake this product exists to prevent, and burning tokens
+ *                      on it would be ironic.
+ *   reconcileDecision  the same decide() re-run on the post-draft state, behind the
+ *                      same shouldDraft condition: a verdict that no longer holds
+ *                      stops before compliance.
+ *   compliance         a refused section goes BACK to the Writer. That cycle is the
+ *                      "reviser" verb of the agentic-depth criterion.
  *
- * Both are bounded in the edge condition, never by asking the model to stop.
+ * All three are decided in the edge condition, and the redraft loop is bounded
+ * there too - never by asking the model to stop.
  *
  * GRAPH_VERSION is bumped on any node or prompt change: checkpoints are keyed on
  * it, so a stale checkpoint from an older graph is never resumed into a newer one.

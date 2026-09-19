@@ -39,7 +39,7 @@ prompt, puis échoue bruyamment en `SCHEMA_VALIDATION_FAILED`.
 **Ce que ça me coûte, et que j'assume :** un renommage ne se propage pas tout
 seul, et rien ne rattrape un `await` oublié — c'est une revue, pas un
 compilateur. Je l'ai payé en tests : chaque schéma zod est aussi testé avec une
-charge malformée, et 330 tests unitaires tournent sans réseau ni base.
+charge malformée, et 399 tests unitaires tournent sans réseau ni base.
 
 Le web, lui, **est** en TypeScript : les schémas partagés vivent en JavaScript
 dans `packages/shared`, l'api les importe directement, et le front en tire ses

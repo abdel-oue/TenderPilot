@@ -6,14 +6,15 @@ pour les services et les tables, [architecture.md](architecture.md).
 
 ```
 PDF déposé
-   │  lib/uploads.js        octets validés (%PDF), écrits sous uploads/<user>/<sha256>.pdf
+   │  lib/uploads.js        octets validés (%PDF), écrits sous
+   │                        uploads/<owner>/<tender|company>/<sha256>.pdf
    ▼
 documents (ligne)          upsert sur (owner_id, content_hash), extraction_path = 'pending'
    │
    ├─ TOUT dépôt ─────────────────────────────▶ file `index`  ──▶ IndexingService
    │                                                               (ingest + embeddings)
    └─ document de dossier (tender_id défini) ──▶ file `analysis` ▶ le graphe
-        quand l'analyse est lancée                                  (ingest, puis 8 nœuds)
+        quand l'analyse est lancée                                  (ingest, puis 9 nœuds)
 ```
 
 L'extraction n'arrive **jamais** dans le handler HTTP. Un OCR complet, c'est ~35 s ;
@@ -70,7 +71,7 @@ readFile → sha256 ─┬─ cache ─┬─ 0 page illisible ─────�
                         ├─ isReadablePage() sur CHAQUE page
                         │     lisible ──▶ extraction = 'text_layer'
                         │     douteuse ─▶ pdftoppm -f N -l M -r 200 → PNG
-                        │                 → tesseract -l fra
+                        │                 → tesseract -l $OCR_LANG (fra+eng)
                         │                   relu par isReadablePage() :
                         │                     lisible ──▶ 'ocr'
                         │                     sinon ───▶ 'unread'
@@ -190,10 +191,10 @@ chacun transforme.
 | Nœud | Entrée | Sortie | Modèle |
 |---|---|---|---|
 | `ingest` | documents du dossier | `pages[]` numérotées + étiquetées | — |
-| `extractRequirements` | pages lisibles, **une passe par document** | lignes `requirements` avec page + citation verbatim | volume |
+| `extractRequirements` | pages lisibles, **une passe par document**, puis un audit par lot de 8 pages | lignes `requirements` avec page + citation verbatim, vérifiée sur la page | volume |
 | `classifyRequirements` | chaque exigence + sa citation | `obligation` re-décidée, concurrence 5 | volume |
 | `parseRubric` | pages lisibles | `rubric_criteria` de CE dossier | volume |
-| `matchProfile` | exigences × profil + références + CV | `met` / `partial` / `unmet` / `unknown` + confiance | **raisonnement** |
+| `matchProfile` | exigences × profil + références + CV | `met` / `partial` / `unmet` / `unknown` + confiance, **preuves contrôlées** | **raisonnement** + volume (contrôle) |
 | `computeScore` | exigences + correspondances | couverture 0-100, projection sur la grille | — (pur) |
 | `decide` | score + correspondances | `go` / `no-go`, blockers, alertes | — (pur) |
 | `draft` | exigences groupées par catégorie | sections rédigées, avec outils | **raisonnement** |
@@ -206,6 +207,15 @@ Pourquoi ces découpes :
   condition du règlement et le seuil de la grille doivent être visibles par le même
   appel ; et par document, `sourceDocumentId` est connu sans que le modèle ait à le
   deviner.
+- **L'extraction est relue par lots de 8 pages.** Le premier appel optimise le
+  rappel sur tout le document ; l'audit repasse page par page, doit rendre compte
+  de **chaque** page du lot (sinon l'étape échoue), et récupère les omissions. Le
+  compte d'omissions récupérées apparaît dans la trace.
+- **Chaque citation est vérifiée sur sa page source** (`lib/provenance.js`) avant
+  d'être écrite : le texte cité doit se retrouver dans la page, aux ellipses près
+  et sans recoller des fragments dans un ordre que le document n'a pas. Une
+  citation non retrouvée reste visible, marquée non vérifiée — elle n'est jamais
+  comptée comme point bloquant, et l'écart remonte comme erreur d'étape.
 - **`classifyRequirements` ne re-décide qu'un champ.** L'extracteur optimise le
   rappel sur tout un dossier ; cette passe optimise la précision sur la seule
   question qui décide du verdict. C'est la clause discrète de la page 47.
@@ -218,9 +228,25 @@ Pourquoi ces découpes :
 ### Ce qui bloque, et ce qui ne bloque pas
 
 Seule une exigence `obligation = eliminatoire` **et** `nature = capacite` non
-satisfaite (`unmet` ou `unknown`) devient un blocker. Un `unknown` bloque
-volontairement : une exigence éliminatoire qu'on n'a pas su évaluer est un risque à
-remonter, pas un trou à cacher.
+satisfaite (`unmet`, `unknown` ou `partial`) devient un blocker. Un `unknown`
+bloque volontairement : une exigence éliminatoire qu'on n'a pas su évaluer est un
+risque à remonter, pas un trou à cacher. Un `partial` aussi : « 2 références sur
+les 3 exigées » est un rejet en commission.
+
+Deux exigences échappent au calcul, et les deux sont dans le code :
+
+- une **attestation administrative renouvelable** (fiscale, CNSS, régularité) se
+  demande au guichet avant le dépôt — elle sort en avertissement, jamais en no-go
+  (`lib/renewableAttestations.js`) ;
+- une exigence dont la **citation n'a pas été vérifiée** sur sa page source
+  (`quoteVerified === false`) ne disqualifie personne ; l'écart est remonté comme
+  erreur d'étape.
+
+Et un `met` sur une capacité éliminatoire est contrôlé avant d'être cru :
+identifiants de preuve recoupés contre les enregistrements de l'entreprise
+(`lib/evidence.js`), puis jugés un par un par l'agent Evidence. Un contrôle
+négatif, absent ou sauté retombe en `unknown`, donc en point bloquant. Détail :
+[agents.md](agents.md#le-contrôle-des-preuves).
 
 Le score de couverture n'est calculé que sur les `capacite`, pondéré par obligation
 (`eliminatoire` 3, `obligatoire` 2, `optionnelle` 1) et crédité par statut (`met` 1,

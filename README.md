@@ -140,10 +140,10 @@ s'arrêter, on l'en empêche.
 | ❓ [FAQ](docs/faq.md) | Les choix de stack et d'architecture, et pourquoi |
 | ⚖️ [Jugement de l'agent](docs/agent-judgement.md) | Deux correctifs appliqués : la lecture des dates, le déclencheur d'`ask_human` |
 
-Annexes : [CLAUDE.md](CLAUDE.md) (règles de code) ·
-[apps/web/CLAUDE.md](apps/web/CLAUDE.md) (conventions du web) ·
+Annexes : [CLAUDE.md](CLAUDE.md) (règles de code, web et api) ·
 [apps/web/LANDING.md](apps/web/LANDING.md) (vitrine) ·
-[docs/nginx/](docs/nginx/) (vhost de l'api).
+[docs/nginx/](docs/nginx/) (vhost de l'api) ·
+[apps/api/src/db/seed/data/README-jeux-de-donnees.md](apps/api/src/db/seed/data/README-jeux-de-donnees.md) (le corpus).
 
 ---
 

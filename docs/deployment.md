@@ -3,7 +3,8 @@
 ## Prérequis
 
 - Docker + Docker Compose
-- Le corpus dans `apps/api/src/db/seed/data/` (gitignoré, déposé localement)
+- Rien d'autre : le corpus est commité dans `apps/api/src/db/seed/data/` et monté
+  en lecture seule dans les conteneurs api et worker
 - Les clés modèle fournies par l'organisation
 
 Node 22 n'est nécessaire que pour développer hors conteneur.
@@ -13,7 +14,6 @@ Node 22 n'est nécessaire que pour développer hors conteneur.
 ```bash
 git clone <repo> && cd tenderpilot
 cp .env.example .env          # puis y coller les clés modèle
-cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
 npm run up                    # → web http://localhost:4100, api http://localhost:4000
 ```
 
@@ -21,7 +21,7 @@ npm run up                    # → web http://localhost:4100, api http://localh
 d'acceptation de ce fichier : si ça ne suffit pas, c'est un bug.
 
 Tout le Docker vit dans `docker/` : `Dockerfile`, `init.sql`,
-`docker-compose.yml`, `docker-compose.dev.yml`. Seul `.dockerignore` reste à la
+`docker-compose.yml`, `docker-compose.dev.yml` et `docker-compose.vps.yml`. Seul `.dockerignore` reste à la
 racine, parce que Docker ne le lit qu'à la racine du contexte de build. Les
 chemins des fichiers compose sont relatifs à `docker/`, et `.env` reste à la
 racine : d'où les `-f docker/docker-compose.yml --env-file .env` que les scripts
@@ -278,7 +278,7 @@ unitaire, c'est une facture instable.
 | Symptôme | Cause habituelle |
 |---|---|
 | l'api ne démarre pas, `Invalid environment` | une clé manque dans `.env` ; le message nomme laquelle |
-| `DOCUMENT_FILE_MISSING` | le corpus n'est pas dans `seed/data/` |
+| `DOCUMENT_FILE_MISSING` | le fichier n'est plus sur le disque : volume `uploads` supprimé, ou montage du corpus absent |
 | l'analyse reste en `queued` | le worker est arrêté : `npm run logs`, attendre `worker: ready` |
 | `relation already exists` au démarrage | une migration appliquée a été éditée. Ne jamais faire ça |
 | l'OCR échoue | `pdftoppm` / `tesseract` absents — ils sont dans l'image api, pas sur l'hôte |

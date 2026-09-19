@@ -59,7 +59,7 @@ Les configurations ciblées, toutes dans `apps/web` :
 |---|---|
 | Docker + Compose | la façon normale de tout lancer |
 | Node 22.18+ (`.nvmrc`) | développer ou tester hors conteneur |
-| le corpus | `apps/api/src/db/seed/data/`, gitignoré, déposé à la main |
+| le corpus | `apps/api/src/db/seed/data/`, **commité** : rien à déposer |
 | les clés modèle | `.env`, jamais commitées |
 
 `pdftoppm` (poppler) et `tesseract` ne sont **pas** requis sur l'hôte : ils sont
@@ -72,9 +72,12 @@ restant marquées illisibles.
 ```bash
 git clone <repo> && cd tenderpilot
 cp .env.example .env               # seules les cles modele : LLM_*, AZURE_OPENAI_*
-cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
 npm run up                         # build + migrations + seed
 ```
+
+Le corpus est dans le dépôt : un clone propre a déjà les dix dossiers, le profil
+entreprise et les attestations. Il est `.dockerignore`d et monté en lecture seule
+dans les conteneurs api et worker, jamais embarqué dans l'image.
 
 → web `http://localhost:4100` · api `http://localhost:4000` ·
 compte `demo@tenderpilot.local` / `demo1234`. L'api écoute 4000 et le web 4100,

@@ -179,6 +179,45 @@ tâche de la réponse, pas une preuve d'inéligibilité : l'entreprise ne peut p
 « échouer » aujourd'hui à déposer un pli qu'elle n'a pas encore rédigé. Une
 `notation` est décidée par la commission après le dépôt.
 
+Non satisfaite veut dire `unmet`, `unknown` **ou `partial`** : « 2 références sur
+les 3 exigées » est un rejet en commission, et arrondir au supérieur rendait un GO
+confiant sur un dossier qui ne pouvait pas gagner. L'humain peut écarter le point
+bloquant ; l'agent, non.
+
+**Deux exceptions, toutes deux dans le code** (`lib/renewableAttestations.js`,
+`graph/nodes/decide.node.js`) :
+
+- **Une attestation administrative renouvelable** — fiscale, CNSS, régularité —
+  n'est pas une capacité absente : elle se demande au guichet avant le dépôt. Elle
+  devient un **avertissement** (« à renouveler ou à vérifier »), jamais un no-go.
+  Le filtre est délibérément étroit : une certification, une référence ou un
+  chiffre d'affaires reste une capacité même si le modèle appelle son justificatif
+  une attestation.
+- **Une citation non vérifiée sur sa page source** (`quoteVerified === false`)
+  n'entre pas dans le calcul des points bloquants, et remonte comme erreur
+  d'étape : une exigence dont on n'a pas retrouvé le texte ne disqualifie personne.
+
+### Le contrôle des preuves
+
+Un `met` sur une capacité éliminatoire est la seule réponse qui peut faire passer
+un dossier ; c'est donc la seule qui est vérifiée deux fois.
+
+1. `lib/evidence.js` recoupe chaque identifiant cité (`REF-07`, `CV-03`,
+   `profil.*`, `documentId:pN`) contre un **catalogue construit à partir des
+   enregistrements de l'entreprise et des retours réels d'outils**. Un
+   identifiant qui n'y figure pas, une exigence évaluée deux fois, ou un `met`
+   sans aucune preuve : le statut retombe en `unknown`, confiance 0.
+2. Ce qui survit part à l'**agent Evidence** (`agents/evidence.agent.js`), qui
+   juge preuve par preuve si l'enregistrement cité soutient réellement l'exigence.
+   Un avis négatif ou absent retombe aussi en `unknown`, avec la raison du
+   contrôle.
+3. `decide` refuse pour finir tout `met` éliminatoire dont `evidenceValidated`
+   n'est pas `true` : un contrôle sauté n'est pas un contrôle réussi.
+
+C'est la version machine du refus d'inventer : un `unknown` remonte comme point
+bloquant à vérifier, ce qui est bruyant — et c'est voulu, parce que l'autre sens
+de l'erreur est un GO sur une preuve que personne n'a vue.
+
 Sans cette distinction, chaque dossier revenait en no-go parce que le profil ne
 disait rien d'une date de dépôt. Le corpus est 6 go / 4 no-go ; un agent qui
 répond « non » systématiquement se trompe six fois sur dix.
@@ -212,6 +251,7 @@ délibéré, jamais la pente naturelle.
 | Extractor | volume | gpt-4.1 | extraction structurée à haut débit |
 | Classifier | volume | gpt-4.1 | une question bornée, répétée par exigence |
 | Matcher | **reasoning** | gpt-5.5 | pèse des preuves partielles sur 24 références et 14 CV, et doit refuser d'extrapoler |
+| Evidence | volume | gpt-4.1 | contrôle une preuve à la fois contre l'enregistrement cité : question fermée, pas de rédaction |
 | Writer | **reasoning** | gpt-5.5 | planifie ses outils puis rédige un texte qu'un humain signera |
 | Compliance | volume | gpt-4.1 | vérifie un texte court contre une liste courte |
 | Embeddings | — | embedder-small-3 (512 dim) | calculés une fois, stockés, jamais réindexés par requête |
@@ -229,11 +269,13 @@ et non dans chaque nœud : ajouter un nœud ne peut pas oublier de tracer.
 [ok] extractRequirements  11 exigences extraites                13228ms
 [ok] classifyRequirements 8 exigences eliminatoires             10072ms
 [ok] parseRubric          grille de notation : 5 criteres        7274ms
-[ok] matchProfile         3/11 couvertes par le profil          21990ms
+[ok] matchProfile         3/11 exigences couvertes par le profil
+                          (4 appels d'outil)                   21990ms
 [ok] computeScore         score de couverture : 50/100              1ms
 [ok] decide               go - 0 point(s) bloquant(s)               2ms
 [ok] draft                4 sections redigees                   25920ms
-[ok] compliance           4 sections validees, 0 refusees        8785ms
+[ok] compliance           4 sections controlees, 0 a revoir,
+                          0 refusees                            8785ms
 ```
 
 Cette trace vit dans `analysis_runs.node_trace`, donc elle survit à un
