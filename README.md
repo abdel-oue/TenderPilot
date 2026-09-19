@@ -6,13 +6,59 @@
 **cite sa page source**, chaque outil appelé est visible, et le mémoire technique
 reste un brouillon à vérifier. Les 80 % sont un objectif, pas une complétude mesurée.
 
-[Documentation](#-documentation) · [Stack](#-stack) · [Démarrage](#-démarrage) ·
+[Démarrage](#-démarrage) · [Documentation](#-documentation) · [Stack](#-stack) ·
 [Structure](#-structure-du-dépôt) · [FAQ](#-faq)
 
-**En ligne :** [tenderpilot.ouedghiri.dev](https://tenderpilot.ouedghiri.dev) ·
-`demo@tenderpilot.local` / `demo1234`
+**En ligne :** [tenderpilot.ouedghiri.dev](https://tenderpilot.ouedghiri.dev)
 
 </div>
+
+---
+
+## 🚀 Démarrage
+
+Une machine avec Docker, rien d'autre : le corpus d'exemple est **dans le dépôt**.
+
+```bash
+git clone https://github.com/abdel-oue/TenderPilot.git && cd TenderPilot
+cp .env.example .env     # remplir LLM_*, AZURE_OPENAI_*, JWT_SECRET
+npm run up               # build + migrations + seed
+```
+
+→ interface **http://localhost:4100** · api **http://localhost:4000**
+
+Sur l'écran de connexion, **Essayer avec des données d'exemple** ouvre un espace
+temporaire sans inscription, pré-rempli avec une copie du jeu de données : deux
+visiteurs ne modifient pas les dossiers l'un de l'autre.
+
+```bash
+npm run logs             # suivre api + worker
+npm run down             # tout arrêter — la base survit (volume nommé)
+npm run db:index         # (re)plonger le corpus, idempotent
+npm test                 # la suite unitaire, sans réseau ni base
+```
+
+`npm run up` écrit `docker/.env.local` au premier lancement : un mot de passe
+Postgres et un `JWT_SECRET` tirés au sort **pour cette installation**, gitignorés.
+Deux machines ne partagent jamais le même mot de passe de base.
+
+Les ports publiés sont des variables (`API_HOST_PORT` 4000, `WEB_HOST_PORT` 4100,
+`POSTGRES_HOST_PORT` 5433) et n'écoutent que sur `127.0.0.1`. Le même numéro vaut
+dans le conteneur et sur l'hôte.
+
+Variables, diagnostic et cas d'erreur : **[docs/deployment.md](docs/deployment.md)**.
+Développer hors conteneur et lancer les tests : **[docs/testing.md](docs/testing.md)**.
+
+### Instance en ligne
+
+| Moitié | Hébergeur | Adresse |
+|---|---|---|
+| web (Next.js) | Vercel | [tenderpilot.ouedghiri.dev](https://tenderpilot.ouedghiri.dev) |
+| api + worker + postgres + redis | VPS, derrière nginx | `api.tenderpilot.ouedghiri.dev` |
+
+Elle ne remplace pas la pile locale : `npm run up` sur un clone propre reste la
+voie de référence. [Pourquoi elle existe](docs/faq.md#pourquoi-une-instance-en-ligne-alors-que-le-sujet-ne-demande-que-docker-compose-up-) ·
+[comment elle est déployée](docs/deployment.md).
 
 ---
 
@@ -145,54 +191,6 @@ flowchart LR
 
 Le web n'appelle jamais un modèle et ne touche jamais la base ; l'api ne fait
 jamais tourner le graphe. Détail : [docs/architecture.md](docs/architecture.md).
-
----
-
-## 🚀 Démarrage
-
-Une machine avec Docker, rien d'autre : le corpus d'exemple est **dans le dépôt**.
-
-```bash
-git clone https://github.com/abdel-oue/TenderPilot.git && cd TenderPilot
-cp .env.example .env     # remplir LLM_*, AZURE_OPENAI_*, JWT_SECRET
-npm run up               # build + migrations + seed
-```
-
-→ interface **http://localhost:4100** · api **http://localhost:4000**
-→ compte `demo@tenderpilot.local` / `demo1234`
-
-Sur l'écran de connexion, **Essayer avec des données d'exemple** ouvre un espace
-temporaire sans inscription, pré-rempli avec une copie du jeu de données : deux
-visiteurs ne modifient pas les dossiers l'un de l'autre.
-
-```bash
-npm run logs             # suivre api + worker
-npm run down             # tout arrêter — la base survit (volume nommé)
-npm run db:index         # (re)plonger le corpus, idempotent
-npm test                 # la suite unitaire, sans réseau ni base
-```
-
-`npm run up` écrit `docker/.env.local` au premier lancement : un mot de passe
-Postgres et un `JWT_SECRET` tirés au sort **pour cette installation**, gitignorés.
-Deux machines ne partagent jamais le même mot de passe de base.
-
-Les ports publiés sont des variables (`API_HOST_PORT` 4000, `WEB_HOST_PORT` 4100,
-`POSTGRES_HOST_PORT` 5433) et n'écoutent que sur `127.0.0.1`. Le même numéro vaut
-dans le conteneur et sur l'hôte.
-
-Variables, diagnostic et cas d'erreur : **[docs/deployment.md](docs/deployment.md)**.
-Développer hors conteneur et lancer les tests : **[docs/testing.md](docs/testing.md)**.
-
-### Instance en ligne
-
-| Moitié | Hébergeur | Adresse |
-|---|---|---|
-| web (Next.js) | Vercel | [tenderpilot.ouedghiri.dev](https://tenderpilot.ouedghiri.dev) |
-| api + worker + postgres + redis | VPS, derrière nginx | `api.tenderpilot.ouedghiri.dev` |
-
-Elle ne remplace pas la pile locale : `npm run up` sur un clone propre reste la
-voie de référence. [Pourquoi elle existe](docs/faq.md#pourquoi-une-instance-en-ligne-alors-que-le-sujet-ne-demande-que-docker-compose-up-) ·
-[comment elle est déployée](docs/deployment.md).
 
 ---
 
