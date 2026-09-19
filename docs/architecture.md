@@ -14,12 +14,13 @@ Tous les schémas de ce document existent aussi en Mermaid, copiables, dans
 ┌──────────┐      ┌──────────┐      ┌──────────┐
 │   web    │─────▶│   api    │─────▶│ postgres │
 │ Next.js  │ HTTP │ Fastify  │      │ + pgvector│
-│  :3100   │      │  :3000   │      │  :5432   │
-└──────────┘      └────┬─────┘      └────▲─────┘
+│  :3100   │◀ ─ ─ │  :3000   │      │  :5432   │
+└──────────┘ SSE  └────┬─────┘      └────▲─────┘
                        │ enqueue          │
+                       │ subscribe        │
                   ┌────▼─────┐      ┌─────┴────┐
                   │  redis   │◀─────│  worker  │
-                  │  :6379   │      │ LangGraph│
+                  │  :6379   │ pub  │ LangGraph│
                   └──────────┘      └──────────┘
 ```
 
@@ -29,7 +30,7 @@ Tous les schémas de ce document existent aussi en Mermaid, copiables, dans
 | `api` | Fastify. Valide, dispatche, met en file. Ne fait jamais tourner le graphe |
 | `worker` | Même image que l'api, commande différente. C'est ici que le graphe tourne |
 | `postgres` | Vérité métier, vecteurs (pgvector) et checkpoints LangGraph |
-| `redis` | File BullMQ |
+| `redis` | File BullMQ, **et** le pub/sub qui porte les événements de run jusqu'au SSE |
 
 **Pourquoi un worker séparé.** Une analyse complète, c'est une minute d'OCR et
 d'appels modèle. Tant que c'était une promesse non attendue dans le process api,
@@ -37,6 +38,17 @@ un redémarrage de l'api perdait silencieusement toutes les analyses en cours, s
 rien pour les rejouer — constaté, pas théorique : trois analyses orphelines en une
 session. BullMQ déduplique sur un `jobId` dérivé de `tender + graphVersion + run`,
 donc double-cliquer « analyser » ne peut pas lancer deux fois le même graphe.
+
+**Pourquoi Redis porte aussi les événements.** Le graphe tourne dans le worker,
+et c'est l'api que le navigateur interroge : les deux sont des conteneurs
+distincts, donc un appel d'outil terminé n'a aucun chemin direct vers l'écran. Le
+worker publie sur `run:<runId>`, l'api s'y abonne et relaie en SSE. Redis était
+déjà là pour BullMQ, avec son healthcheck — aucune dépendance de plus, aucun
+service de plus.
+
+Ce chemin ne porte **que de la fraîcheur** : tout ce qui y passe est aussi écrit
+en base et arrive sur le sondage d'une seconde. Un Redis absent n'arrête pas une
+analyse et ne perd pas une trace, il rend l'écran une seconde plus lent.
 
 ## Deux langages, délibérément
 

@@ -21,6 +21,8 @@ Base locale : `http://localhost:3000`. Toutes les réponses sont en JSON sauf
 | `ANALYSIS_NOT_FOUND` | 404 | aucune analyse pour cet appel d'offres |
 | `EMAIL_TAKEN` | 409 | e-mail déjà utilisé |
 | `NOTHING_TO_EXPORT` | 409 | aucune section rédigée (un no-go n'est pas rédigé) |
+| `NO_PENDING_QUESTION` | 409 | on répond à un run qui n'attend rien |
+| `STALE_QUESTION` | 409 | on répond à une question que le run a déjà passée |
 | `DOCUMENT_FILE_MISSING` | 410 | le PDF n'est pas sur le disque (corpus non monté) |
 | `UPLOAD_TOO_LARGE` | 413 | fichier au-dessus de `MAX_UPLOAD_MB` |
 | `UPLOAD_NOT_PDF` | 415 | les octets ne commencent pas par `%PDF` |
@@ -270,7 +272,12 @@ direct, une analyse échouée montre jusqu'où elle est allée.
 }
 ```
 
-`status` : `queued` | `running` | `done` | `failed`.
+`status` : `queued` | `running` | `awaiting_human` | `done` | `failed`.
+
+`awaiting_human` est le quatrième cas : l'agent a appelé `ask_human`, le graphe est
+garé sur son point de contrôle, et rien n'avance tant que personne n'a répondu.
+L'enveloppe porte alors `pendingQuestion` — c'est ce que l'écran affiche après un
+rafraîchissement, quand le flux qui l'avait annoncée n'existe plus.
 
 **`blockers` vs `warnings`** : un blocker est une capacité exigée que l'entreprise
 n'a pas — il force le no-go. Un warning est un risque signalé à l'humain et ne
@@ -278,6 +285,46 @@ décide de rien. Voir [agents.md](agents.md#la-règle-qui-décide-dun-no-go).
 
 `evidence` vide est une réponse légitime : l'agent n'a rien trouvé et le dit,
 plutôt que de rapprocher la référence la moins éloignée.
+
+### `GET /tenders/:id/analysis/stream`
+
+Les mêmes informations que `GET .../analysis`, plus tôt. `text/event-stream`, un
+objet JSON par trame :
+
+```
+data: {"type":"status","status":"running"}
+data: {"type":"node","node":"ingest","status":"ok","summary":"7 pages lues","ms":153,"at":"…"}
+data: {"type":"tool","node":"matchProfile","name":"search_documents","raison":"…","outcome":"…","at":"…"}
+data: {"type":"ask","question":{ "askId":"…","question":"…","options":[…] }}
+```
+
+La trame `tool` est la seule chose que le sondage ne peut pas donner : la trace
+n'écrit une ligne qu'à la **fin** d'un nœud, alors que celle-ci part quand l'outil
+rend la main. Le reste est un miroir. **Le sondage reste** : c'est lui qui rend
+l'écran juste après un rafraîchissement, une reconnexion, ou sur un réseau qui
+mange le SSE.
+
+Le worker publie sur Redis (`run:<runId>`), l'api relaie. Une ligne de
+commentaire toutes les 15 s empêche un proxy de fermer une connexion inactive.
+
+### `POST /analyses/:runId/answer`
+
+La réponse humaine à une question posée par l'agent. **`202 Accepted`** : le run
+repart en file et reprend depuis son point de contrôle, il ne se termine pas dans
+cette requête.
+
+```json
+{
+  "askId": "…",
+  "choice": "oui",
+  "instruction": "Certifiés depuis 2023.",
+  "verdictOverride": null,
+  "dismissedBlockers": []
+}
+```
+
+Seuls `askId` et `choice` sont obligatoires. `409 NO_PENDING_QUESTION` si le run
+n'attend rien, `409 STALE_QUESTION` si l'écran répond à une question déjà passée.
 
 ### `PATCH /analyses/:runId/sections`
 

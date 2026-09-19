@@ -4,6 +4,7 @@
  * its source.
  */
 import { z } from 'zod';
+import { humanAnswerSchema } from '@tenderpilot/shared';
 import { appError } from '../lib/errors.js';
 
 const tenderIdParamSchema = z.object({ id: z.uuid('identifiant invalide') });
@@ -44,4 +45,15 @@ export function parseRunIdParam(params) {
 /** @param {unknown} body @returns {{ sectionKey: string, title: string, content: string }} */
 export function parseSectionEditBody(body) {
   return parse(sectionEditSchema, body);
+}
+
+/**
+ * The human's reply to a question the agent asked. The shape is shared with the
+ * web, because the screen that posts it and the service that resumes on it must
+ * agree about what an answer is.
+ * @param {unknown} body
+ * @returns {import('@tenderpilot/shared').HumanAnswer}
+ */
+export function parseHumanAnswerBody(body) {
+  return parse(humanAnswerSchema, body);
 }

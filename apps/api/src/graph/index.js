@@ -24,7 +24,9 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { env } from '../lib/env.js';
 import { logger } from '../lib/logger.js';
+import { isGraphBubbleUp } from '@langchain/langgraph';
 import { describeToolCall } from '../lib/narration.js';
+import { publishRunEvent } from '../lib/runEvents.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
 import { ingest } from './nodes/ingest.node.js';
 import { extractRequirementsNode } from './nodes/extractRequirements.node.js';
@@ -84,12 +86,15 @@ const channels = {
  * graph-level callback rather than sprinkled through each node. Adding a node
  * cannot forget to log.
  *
+ * Exported for the tests: what it does with a thrown error is the difference
+ * between a paused run and a wrong answer, and that deserves an assertion.
+ *
  * @param {string} name
  * @param {(state: object) => Promise<object>} fn
  * @param {AnalysisRepository} analyses
  * @returns {(state: object) => Promise<object>}
  */
-function traced(name, fn, analyses) {
+export function traced(name, fn, analyses) {
   return async (state) => {
     const startedAt = Date.now();
     try {
@@ -103,8 +108,17 @@ function traced(name, fn, analyses) {
         tools: narrate(patch.toolCalls),
       };
       if (state.runId) await analyses.appendTrace(state.runId, entry).catch(() => {});
+      // Without `tools`: each one was already published on its own as it
+      // returned, which is the whole point of the tool event.
+      const { tools: _tools, ...nodeEvent } = entry;
+      await publishRunEvent(state.runId, { type: 'node', ...nodeEvent });
       return { ...patch, nodeTrace: [entry] };
     } catch (error) {
+      // An interrupt is not a node failure. ask_human raised it to park the run
+      // on its checkpoint, and this catch-all is the last thing between it and
+      // LangGraph: recorded as an error here, the pause would become a failed
+      // node and the graph would carry on and answer the dossier alone.
+      if (isGraphBubbleUp(error)) throw error;
       const entry = {
         node: name,
         at: new Date().toISOString(),
@@ -113,6 +127,7 @@ function traced(name, fn, analyses) {
         ms: Date.now() - startedAt,
       };
       if (state.runId) await analyses.appendTrace(state.runId, entry).catch(() => {});
+      await publishRunEvent(state.runId, { type: 'node', ...entry });
       logger.error({ node: name, err: error.message }, 'graph: node failed');
       // One node failing records itself and lets the graph continue: a dossier
       // half-analysed with an explicit error beats no answer at all.

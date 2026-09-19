@@ -25,6 +25,68 @@ export const matchedProfileSchema = z.object({
   matches: z.array(requirementMatchSchema),
 });
 
+// A run has a fourth outcome: the agent called ask_human and the graph is parked
+// on its checkpoint until somebody answers. It is not 'running' - nothing is
+// executing - and it is not terminal, so it needs its own name or the UI stops
+// polling a run that is very much alive.
+export const runStatusSchema = z.enum(['queued', 'running', 'awaiting_human', 'done', 'failed']);
+
+// 'human' marks the answer a person gave, recorded in the same trace as the
+// agent's own steps so the conversation reads in order after the fact.
+export const traceStatusSchema = z.enum(['ok', 'error', 'retry', 'human']);
+
+// What the agent asks. `options` is what makes this renderable: a free-text
+// question would put the burden of guessing the accepted answers on the reader,
+// and the model already knows them when it asks.
+export const askOptionSchema = z.object({
+  value: z.string().min(1).max(64),
+  label: z.string().min(1).max(200),
+});
+
+export const pendingQuestionSchema = z.object({
+  askId: z.string().min(1),
+  node: z.string().min(1),
+  question: z.string().min(1).max(2000),
+  // The model's own sentence for why it is asking, same field every tool carries.
+  raison: z.string().nullable(),
+  options: z.array(askOptionSchema).min(2).max(6),
+  askedAt: z.string(),
+});
+
+// The human's reply. Every field but `askId` and `choice` is optional: the two
+// buttons are the whole interaction most of the time.
+export const humanAnswerSchema = z.object({
+  askId: z.string().min(1),
+  choice: z.string().min(1).max(64),
+  instruction: z.string().max(2000).optional(),
+  verdictOverride: z.enum(['go', 'no-go']).nullable().optional(),
+  dismissedBlockers: z.array(z.string()).max(50).optional(),
+});
+
+// The SSE payloads. Same data the poll returns, sooner - a dropped stream costs
+// freshness, never correctness.
+export const runEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('node'),
+    node: z.string(),
+    status: traceStatusSchema,
+    summary: z.string(),
+    ms: z.number().optional(),
+    at: z.string(),
+  }),
+  z.object({
+    type: z.literal('tool'),
+    node: z.string(),
+    name: z.string(),
+    raison: z.string().nullable(),
+    outcome: z.string(),
+    ms: z.number().optional(),
+    at: z.string(),
+  }),
+  z.object({ type: z.literal('ask'), question: pendingQuestionSchema }),
+  z.object({ type: z.literal('status'), status: runStatusSchema }),
+]);
+
 export const verdictSchema = z.object({
   verdict: z.enum(['go', 'no-go']),
   confidence: z.number().min(0).max(1),
@@ -41,13 +103,13 @@ export const analysisSchema = verdictSchema.extend({
   ),
   // EX-07: pages the pipeline could not read. Surfaced, never silently dropped.
   unreadPages: z.array(z.object({ documentId: z.string(), page: z.number().int() })),
-  status: z.enum(['queued', 'running', 'done', 'failed']),
+  status: runStatusSchema,
   nodeTrace: z.array(
     z.object({
       node: z.string(),
       at: z.string(),
       summary: z.string(),
-      status: z.enum(['ok', 'error', 'retry']),
+      status: traceStatusSchema,
       ms: z.number().optional(),
       tools: z
         .array(
@@ -69,3 +131,6 @@ export const analysisSchema = verdictSchema.extend({
 /** @typedef {import('zod').infer<typeof analysisSchema>} Analysis */
 /** @typedef {import('zod').infer<typeof blockerSchema>} Blocker */
 /** @typedef {import('zod').infer<typeof verdictSchema>} Verdict */
+/** @typedef {import('zod').infer<typeof runEventSchema>} RunEvent */
+/** @typedef {import('zod').infer<typeof pendingQuestionSchema>} PendingQuestion */
+/** @typedef {import('zod').infer<typeof humanAnswerSchema>} HumanAnswer */

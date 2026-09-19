@@ -17,14 +17,17 @@ function getService() {
 }
 
 /**
- * @param {{ data: { runId: string, tenderId: string, ownerId: string } }} job
+ * `resume` is present when a human answered a question the agent asked: the same
+ * processor runs, but the graph picks up from its checkpoint instead of starting.
+ *
+ * @param {{ data: { runId: string, tenderId: string, ownerId: string, resume?: object } }} job
  * @returns {Promise<{ verdict: string|null }>}
  */
 export async function processAnalysis(job) {
-  const { runId, tenderId, ownerId } = job.data;
-  logger.info({ jobId: job.id, runId, tenderId }, 'job: analysis start');
+  const { runId, tenderId, ownerId, resume = null } = job.data;
+  logger.info({ jobId: job.id, runId, tenderId, resumed: Boolean(resume) }, 'job: analysis start');
 
-  const state = await getService().execute(runId, tenderId, ownerId);
+  const state = await getService().execute(runId, tenderId, ownerId, resume);
 
   logger.info({ jobId: job.id, runId, verdict: state?.verdict }, 'job: analysis done');
   return { verdict: state?.verdict ?? null };

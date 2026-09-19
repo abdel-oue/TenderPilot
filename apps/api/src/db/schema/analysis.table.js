@@ -12,8 +12,12 @@ export const analysisRuns = pgTable(
       .notNull()
       .references(() => tenders.id, { onDelete: 'cascade' }),
     graphVersion: text('graph_version').notNull(),
-    status: text('status').notNull().default('queued'), // queued|running|done|failed
+    status: text('status').notNull().default('queued'), // queued|running|awaiting_human|done|failed
     nodeTrace: jsonb('node_trace').notNull().default([]),
+    // Set when the agent called ask_human and the graph parked on its checkpoint.
+    // Nullable and cleared on resume, so "is this run waiting on me" is one
+    // column rather than a scan of the trace. Shape: pendingQuestionSchema.
+    pendingQuestion: jsonb('pending_question'),
     error: text('error'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),

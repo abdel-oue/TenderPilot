@@ -1,6 +1,6 @@
 // Fetch wrappers for analysis.
 import { apiUrl, ApiError, request } from "./client";
-import type { AnalysisEnvelope } from "@/lib/types";
+import type { AnalysisEnvelope, HumanAnswer } from "@/lib/types";
 
 /**
  * Returns null when no analysis has ever run for this dossier. That is a normal
@@ -28,6 +28,28 @@ export async function saveSection(
   input: { sectionKey: string; title: string; content: string },
 ) {
   return await request(`/analyses/${runId}/sections`, { method: "PATCH", body: input });
+}
+
+/**
+ * The human's reply to a question the agent asked. 202: the run goes back on the
+ * queue and resumes from its checkpoint, it does not finish inside this request.
+ */
+export async function answerQuestion(runId: string, answer: HumanAnswer) {
+  return (await request(`/analyses/${runId}/answer`, { body: answer })) as {
+    runId: string;
+    status: string;
+  };
+}
+
+/**
+ * The live event stream for a run. EventSource, not fetch: it reconnects on its
+ * own and the browser owns the retry, which is the whole reason to use it.
+ *
+ * `withCredentials` matters - the session is an httpOnly cookie on the api's
+ * origin, and without it the stream is rejected as anonymous.
+ */
+export function runStreamUrl(tenderId: string): string {
+  return apiUrl(`/tenders/${tenderId}/analysis/stream`);
 }
 
 /** EX-05: a plain download link, so the browser handles the file. */

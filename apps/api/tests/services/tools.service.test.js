@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import ToolsService from '../../src/services/tools.service.js';
+import { createHash } from 'node:crypto';
+import ToolsService, { MAX_HUMAN_ASKS } from '../../src/services/tools.service.js';
 
 const OWNER = 'owner-1';
 const TENDER = 'tender-1';
@@ -68,6 +69,7 @@ describe('ToolsService.definitions', () => {
       'calculate',
       'get_current_date',
       'simulate_score',
+      'ask_human',
     ]);
   });
 
@@ -553,5 +555,104 @@ describe('the raison argument', () => {
   it('does not stop a tool working when it is absent', async () => {
     const result = await build().execute('calculate', { expression: '2+2' }, CONTEXT);
     expect(result.value).toBe(4);
+  });
+});
+
+describe('ask_human', () => {
+  /** @param {object[]} trace what the run has recorded so far */
+  function withTrace(trace) {
+    const parked = [];
+    const service = build({
+      analyses: {
+        async findRunById() { return { id: RUN, nodeTrace: trace }; },
+        async setPendingQuestion(_runId, question) { parked.push(question); },
+      },
+    });
+    return { service, parked };
+  }
+
+  const OPTIONS = [
+    { value: 'oui', label: 'Oui, nous la detenons' },
+    { value: 'non', label: 'Non' },
+  ];
+
+  it('parks the question before suspending, because interrupt() never returns', async () => {
+    // Everything written after interrupt() is unreachable, so the question has to
+    // be persisted first or the screen has nothing to render the pause from.
+    // Outside a graph interrupt() throws a plain Error rather than a
+    // GraphInterrupt, so here it degrades to { error } - the rethrow of a real
+    // interrupt is asserted in tests/graph/traced.test.js.
+    const { service, parked } = withTrace([]);
+
+    const result = await service.execute(
+      'ask_human',
+      // `raison` rides in with the arguments, like on every other tool: it is
+      // the model's own sentence, written on the call it was already making.
+      { question: 'ISO 22301 ?', options: OPTIONS, raison: 'pour ne pas vous ecarter a tort' },
+      { ...CONTEXT, node: 'matchProfile' },
+    );
+
+    expect(parked).toHaveLength(1);
+    expect(parked[0]).toMatchObject({
+      node: 'matchProfile',
+      question: 'ISO 22301 ?',
+      raison: 'pour ne pas vous ecarter a tort',
+      options: OPTIONS,
+    });
+    expect(parked[0].askId).toBeTruthy();
+    expect(result.error).toMatch(/interrupt/i);
+  });
+
+  it('answers from the trace on the replay instead of asking twice', async () => {
+    // Resuming re-executes the whole node, so the same question comes back
+    // around. Asking again would park the run on a question already answered.
+    const askKey = createHash('sha256').update('matchProfile|ISO 22301 ?').digest('hex').slice(0, 16);
+    const { service } = withTrace([
+      { node: 'matchProfile', status: 'human', askKey, choice: 'oui', instruction: 'nous l avons depuis 2023' },
+    ]);
+
+    const result = await service.execute(
+      'ask_human',
+      { question: 'ISO 22301 ?', options: OPTIONS },
+      { ...CONTEXT, node: 'matchProfile' },
+    );
+
+    expect(result).toEqual({ reponse: 'oui', instruction: 'nous l avons depuis 2023' });
+  });
+
+  it('stops asking once the budget is spent', async () => {
+    // Bounded in code, never in a prompt - the same rule as MAX_REDRAFTS. The
+    // agent gets an error it can act on and finishes alone.
+    const spent = Array.from({ length: MAX_HUMAN_ASKS }, (_, index) => ({
+      node: 'matchProfile',
+      status: 'human',
+      askKey: 'other-' + index,
+      choice: 'oui',
+    }));
+
+    const result = await withTrace(spent).service.execute(
+      'ask_human',
+      { question: 'une question de plus ?', options: OPTIONS },
+      { ...CONTEXT, node: 'matchProfile' },
+    );
+
+    expect(result.error).toMatch(/[Bb]udget/);
+  });
+
+  it('refuses a question with fewer than two options', async () => {
+    // The options are what make the pause renderable. One option is not a
+    // question, it is a notification.
+    const result = await withTrace([]).service.execute(
+      'ask_human',
+      { question: 'ISO 22301 ?', options: [{ value: 'oui', label: 'Oui' }] },
+      { ...CONTEXT, node: 'matchProfile' },
+    );
+
+    expect(result.error).toMatch(/deux reponses/);
+  });
+
+  it('refuses to ask outside a run', async () => {
+    const result = await withTrace([]).service.execute('ask_human', { question: 'x ?', options: OPTIONS }, {});
+    expect(result.error).toMatch(/[Aa]ucune analyse/);
   });
 });

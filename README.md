@@ -97,15 +97,20 @@ Détails, variables, mise en production et diagnostic :
   icône globe avec menu déroulant, et un seul bouton d'action visible, **Connexion**.
 - `/company` : import du profil depuis un fichier JSON, **vos références**
   filtrables par secteur, et vos documents de référence filtrables par type.
-- `/tenders/[id]` : le verdict, les points bloquants cités page et article, le
-  **détail de la notation** critère par critère, les risques que l'agent a signalés
-  sans en faire une disqualification, la matrice de conformité où chaque exigence
-  porte **la raison** de sa couverture et la confiance associée, les sections du
-  mémoire corrigeables, et la trace de l'agent étape par étape.
+- `/tenders/[id]` : le bouton **Analyser** au centre, seul. Il devient sur place le
+  raisonnement de l'agent, puis se replie en une ligne quand le verdict s'affiche.
+  Chaque appel d'outil apparaît **au moment où il rend la main**, avec la phrase
+  du modèle expliquant pourquoi il l'a appelé et un résultat construit à partir du
+  vrai retour. Les points bloquants, la matrice de conformité et le mémoire
+  technique sont trois panneaux latéraux qu'on ouvre quand on veut vérifier.
+- **L'agent peut vous poser une question** et suspendre son analyse le temps que
+  vous répondiez : une question, ses réponses possibles, et de quoi ajouter une
+  consigne, écarter un point bloquant mal jugé ou forcer le verdict. C'est lui qui
+  décide quand il en a besoin, trois fois par analyse au maximum. Détail dans
+  [docs/agents.md](docs/agents.md).
 
-Ces écrans utilisent les endpoints existants, sans changement backend. Les tests
-navigateur interceptent les appels API : ils vérifient les interactions frontend,
-sans créer de comptes ni envoyer de documents au service réel.
+Les tests navigateur interceptent les appels API : ils vérifient les interactions
+frontend, sans créer de comptes ni envoyer de documents au service réel.
 
 ```bash
 npm run dev:web                     # interface locale :3100
@@ -119,7 +124,7 @@ Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour n
 pas tester accidentellement le serveur de développement sur `:3100` ni la pile
 Docker sur `:4100`.
 
-Vérification frontend au 19/09/2026 : **13 tests unitaires passent ; 49 tests
+Vérification frontend au 19/09/2026 : **22 tests unitaires passent ; 53 tests
 navigateur passent, 1 test réservé au mobile est ignoré sur desktop**. Le lint et le
 build de production font partie des vérifications de cette interface. Les tests
 navigateur utilisent une API simulée et ne constituent pas un test d’intégration du
@@ -318,8 +323,8 @@ npm test          # sans réseau ni base de données
 
 Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.
 
-**Dernier passage global documenté au 19/09/2026 : 273 tests passent, 0 échoue**
-(25 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
+**Dernier passage global documenté au 19/09/2026 : 302 tests passent, 0 échoue**
+(29 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
 au cloisonnement par compte (migration `0004_owner_scoping`) : les tests ont été
 remis à la signature réelle, pas contournés. Ce résultat global est distinct des
 vérifications frontend ci-dessus. `npm run test:e2e` lance la vitrine et l'espace

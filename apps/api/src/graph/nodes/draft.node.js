@@ -7,6 +7,7 @@
  * EX-06: human corrections already saved for this run are fed into the prompt of
  * every later section. The reuse is the requirement, not the saving.
  */
+import { isGraphBubbleUp } from '@langchain/langgraph';
 import WriterAgent from '../../agents/writer.agent.js';
 import AnalysisRepository from '../../repositories/analysis.repository.js';
 import { logger } from '../../lib/logger.js';
@@ -69,7 +70,7 @@ export async function draft(state) {
     try {
       const drafted = await writer.draft(
         { title: section.title, requirements: section.requirements, humanEdits, instructions },
-        { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId },
+        { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId, node: 'draft' },
       );
       sections.push({
         key: section.key,
@@ -81,6 +82,9 @@ export async function draft(state) {
       });
       toolCalls.push(...drafted.toolCalls.map((call) => ({ ...call, section: section.key })));
     } catch (error) {
+      // ask_human suspended the run: LangGraph has to see this, and the sections
+      // already drafted are on the checkpoint, so nothing is lost by leaving.
+      if (isGraphBubbleUp(error)) throw error;
       errors.push({ node: 'draft', message: section.key + ': ' + error.message });
       logger.error({ section: section.key, err: error.message }, 'draft: failed');
     }

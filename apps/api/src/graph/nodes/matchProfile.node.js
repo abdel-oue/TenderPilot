@@ -1,5 +1,6 @@
 // Qualifier, step 1: confront every requirement with the company profile.
 
+import { isGraphBubbleUp } from '@langchain/langgraph';
 import MatcherAgent from '../../agents/matcher.agent.js';
 
 const matcher = new MatcherAgent();
@@ -40,7 +41,7 @@ export async function matchProfile(state) {
     const { matches, toolCalls } = await matcher.match(
       state.requirements,
       { profile, references, team },
-      { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId },
+      { runId: state.runId, tenderId: state.tenderId, ownerId: state.ownerId, node: 'matchProfile' },
     );
     logger.info(
       {
@@ -54,6 +55,9 @@ export async function matchProfile(state) {
     );
     return { matches, toolCalls };
   } catch (error) {
+    // ask_human suspended the run - not a failure, and swallowing it here would
+    // hand the graph an empty match set as though the agent had found nothing.
+    if (isGraphBubbleUp(error)) throw error;
     logger.error({ err: error.message }, 'matchProfile: failed');
     return { matches: [], errors: [{ node: 'matchProfile', message: error.message }] };
   }

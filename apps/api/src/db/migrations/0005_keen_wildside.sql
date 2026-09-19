@@ -1,0 +1,1 @@
+ALTER TABLE "analysis_runs" ADD COLUMN "pending_question" jsonb;

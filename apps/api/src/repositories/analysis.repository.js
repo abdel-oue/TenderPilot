@@ -67,6 +67,22 @@ export default class AnalysisRepository {
   }
 
   /**
+   * Parks a question on the run. One nullable column rather than a scan of the
+   * trace, so "is this run waiting on me" is answerable by the list screen
+   * without loading every entry.
+   *
+   * @param {string} runId
+   * @param {object|null} question pendingQuestionSchema, or null to clear it
+   * @returns {Promise<void>}
+   */
+  async setPendingQuestion(runId, question) {
+    await this.db
+      .update(analysisRuns)
+      .set({ pendingQuestion: question })
+      .where(eq(analysisRuns.id, runId));
+  }
+
+  /**
    * @param {string} runId
    * @param {{ status?: string, error?: string|null, finishedAt?: Date|null }} patch
    * @returns {Promise<void>}

@@ -19,15 +19,29 @@
  *   get_current_date         today. Without it the model uses its training date.
  *   simulate_score           replays the verdict under a hypothesis.
  *   web_search               Tavily. Registered ONLY when a key is configured.
+ *   ask_human                asks the dirigeant and SUSPENDS the run on its answer.
  *
  * Two invariants:
  *   - every tool returns data or an explicit `{ error }`, never throws into the
- *     graph: a broken tool degrades one step, it does not kill a dossier;
+ *     graph: a broken tool degrades one step, it does not kill a dossier. The
+ *     one exception is the interrupt ask_human raises, which is not a failure -
+ *     it is the graph parking on its checkpoint, and it must reach LangGraph
+ *     rather than be caught here;
  *   - every tool that touches company or dossier data is scoped by ownerId taken
  *     from the RUN CONTEXT, never from a model-supplied argument.
  */
 import { readFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { interrupt, isGraphBubbleUp } from '@langchain/langgraph';
 import { logger } from '../lib/logger.js';
+import { publishRunEvent } from '../lib/runEvents.js';
+import { describeToolCall } from '../lib/narration.js';
+import {
+  ASK_HUMAN_BUDGET_SPENT,
+  ASK_HUMAN_DESCRIPTION,
+  ASK_HUMAN_OPTIONS,
+  ASK_HUMAN_QUESTION,
+} from '../prompts/askHuman.prompts.js';
 import { businessDaysBetween, daysBetween, parseDate, toIsoDate } from '../lib/dates.js';
 import { calculate } from '../lib/calc.js';
 import { ocrAvailable, ocrPages } from '../lib/ocr.js';
@@ -42,6 +56,11 @@ import LlmService from './llm.service.js';
 import TavilyService from './tavily.service.js';
 
 const COMPANY_KINDS = ['memoire', 'attestation', 'profil'];
+
+// Bounded in code, never in a prompt - the same rule as MAX_REDRAFTS. A model
+// told to "ask sparingly" will still ask eleven times on the one dossier being
+// demoed, and every ask stops the run dead until a human notices.
+export const MAX_HUMAN_ASKS = 3;
 
 export default class ToolsService {
   /**
@@ -194,6 +213,29 @@ export default class ToolsService {
       );
     }
 
+    defs.push(
+      fn(
+        'ask_human',
+        ASK_HUMAN_DESCRIPTION,
+        {
+          question: { type: 'string', description: ASK_HUMAN_QUESTION },
+          options: {
+            type: 'array',
+            description: ASK_HUMAN_OPTIONS,
+            items: {
+              type: 'object',
+              properties: {
+                value: { type: 'string' },
+                label: { type: 'string' },
+              },
+              required: ['value', 'label'],
+            },
+          },
+        },
+        ['question', 'options'],
+      ),
+    );
+
     return defs;
   }
 
@@ -213,17 +255,99 @@ export default class ToolsService {
    */
   async execute(name, args, context = {}) {
     const startedAt = Date.now();
-    // `raison` is for the reader, never for the tool. Stripping it here means no
-    // implementation has to know the narration field exists.
+    // `raison` is for the reader, never for the tool, so it is stripped from the
+    // arguments and no implementation has to know the narration field exists.
+    // It rides along on the context for the one tool that shows it to a human
+    // directly rather than through lib/narration.js.
     const { raison, ...toolArgs } = args ?? {};
     try {
-      const result = await this.dispatch(name, toolArgs, context);
-      logger.info({ tool: name, ms: Date.now() - startedAt }, 'tool: ok');
+      const result = await this.dispatch(name, toolArgs, { ...context, raison: raison ?? null });
+      const ms = Date.now() - startedAt;
+      logger.info({ tool: name, ms }, 'tool: ok');
+      // The trace row for this node is not written until the node ENDS, which on
+      // a node that calls six tools is twenty seconds of silence. This fires the
+      // moment one tool returns, so the reader watches the agent work instead of
+      // watching a spinner and then a wall of text.
+      await publishRunEvent(context.runId, {
+        type: 'tool',
+        node: context.node ?? 'inconnu',
+        name,
+        raison: raison ?? null,
+        // Same narrator the node-level trace uses, so the live row and the row
+        // that survives a refresh say exactly the same thing.
+        outcome: describeToolCall(name, args ?? {}, result ?? {}),
+        ms,
+        at: new Date().toISOString(),
+      });
       return result;
     } catch (error) {
+      // An interrupt is not a failure: ask_human raised it and LangGraph has to
+      // see it to park the run on its checkpoint. Swallowing it here would turn
+      // a pause into a tool that silently returned an error, and the agent would
+      // answer the dossier alone having been told nothing.
+      if (isGraphBubbleUp(error)) throw error;
       logger.warn({ tool: name, err: error.message }, 'tool: failed');
       return { error: error.message };
     }
+  }
+
+  /**
+   * Asks the dirigeant and suspends the run until the answer arrives.
+   *
+   * Resuming re-executes the whole node - that is how LangGraph replays a task -
+   * so the same question comes back around. It is answered from the trace the
+   * second time instead of stopping the run again, which also means a model that
+   * rephrases its question on the replay asks a genuinely new one rather than
+   * silently inheriting an answer to something else.
+   *
+   * @param {{ question: string, options: object[] }} args
+   * @param {{ runId?: string|null, node?: string, raison?: string|null }} context
+   * @returns {Promise<object>} the answer, or `{ error }` when it cannot ask
+   */
+  async askHuman({ question, options }, context) {
+    if (!context.runId) return { error: 'Aucune analyse en cours.' };
+    if (!question || !Array.isArray(options) || options.length < 2) {
+      return { error: 'Il faut une question et au moins deux reponses possibles.' };
+    }
+
+    const run = await this.analyses.findRunById(context.runId);
+    if (!run) return { error: 'Analyse introuvable.' };
+    const trace = run.nodeTrace ?? [];
+    const askKey = createHash('sha256')
+      .update((context.node ?? '') + '|' + question)
+      .digest('hex')
+      .slice(0, 16);
+
+    const answered = trace.find((entry) => entry.status === 'human' && entry.askKey === askKey);
+    if (answered) {
+      return { reponse: answered.choice, instruction: answered.instruction ?? null };
+    }
+
+    if (trace.filter((entry) => entry.status === 'human').length >= MAX_HUMAN_ASKS) {
+      return { error: ASK_HUMAN_BUDGET_SPENT };
+    }
+
+    const pending = {
+      askId: randomUUID(),
+      askKey,
+      node: context.node ?? 'inconnu',
+      question,
+      raison: context.raison ?? null,
+      options: options.slice(0, 6).map((option) => ({
+        value: String(option.value ?? option.label),
+        label: String(option.label ?? option.value),
+      })),
+      askedAt: new Date().toISOString(),
+    };
+
+    // Persisted and published BEFORE the interrupt, because interrupt() throws:
+    // nothing written after this line would ever run.
+    await this.analyses.setPendingQuestion(context.runId, pending);
+    await publishRunEvent(context.runId, { type: 'ask', question: pending });
+    logger.info({ runId: context.runId, node: pending.node }, 'tool: asking the human');
+
+    const answer = interrupt(pending);
+    return { reponse: answer?.choice ?? null, instruction: answer?.instruction ?? null };
   }
 
   /**
@@ -254,6 +378,8 @@ export default class ToolsService {
         return this.simulateScore(args.overrides, context);
       case 'web_search':
         return this.webSearch(args.query, args.maxResults ?? 5, args.fullContent === true);
+      case 'ask_human':
+        return this.askHuman(args, context);
       default:
         return { error: 'Outil inconnu: ' + name };
     }

@@ -4,9 +4,11 @@
  * No SQL (repositories) and no HTTP concerns (controller).
  */
 import { randomUUID } from 'node:crypto';
+import { Command, isInterrupted } from '@langchain/langgraph';
 import { appError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { runWithContext, setContext } from '../lib/requestContext.js';
+import { publishRunEvent } from '../lib/runEvents.js';
 import { GRAPH_VERSION, buildGraph } from '../graph/index.js';
 import { analysisJobId, analysisQueue } from '../queue/queues.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
@@ -49,9 +51,10 @@ export default class AnalysisService {
     if (!tender) throw appError('Appel d offres introuvable.', 'TENDER_NOT_FOUND', 404);
 
     const existing = await this.analyses.findLatestRun(tenderId);
-    if (existing && (existing.status === 'running' || existing.status === 'queued')) {
+    if (existing && ['running', 'queued', 'awaiting_human'].includes(existing.status)) {
       // Idempotent by intent: double-clicking "analyser" must not run the graph
-      // twice against the same dossier.
+      // twice against the same dossier. A run waiting on a human counts as in
+      // flight - starting a second one would abandon a checkpoint mid-question.
       return { runId: existing.id, tenderId, status: existing.status, reused: true };
     }
 
@@ -78,15 +81,18 @@ export default class AnalysisService {
    * @param {string} ownerId
    * @returns {Promise<object>} the final graph state
    */
-  async execute(runId, tenderId, ownerId) {
+  async execute(runId, tenderId, ownerId, resumeWith = null) {
     return runWithContext({ requestId: runId }, async () => {
       setContext({ runId, tenderId });
-      await this.analyses.updateRun(runId, { status: 'running' });
+      await this.setStatus(runId, 'running');
 
       try {
         const graph = await this.getGraph();
+        // A resume hands LangGraph the human's answer instead of a fresh input;
+        // the checkpoint under the thread key below supplies everything else.
+        const input = resumeWith ? new Command({ resume: resumeWith }) : { tenderId, runId, ownerId };
         const state = await graph.invoke(
-          { tenderId, runId, ownerId },
+          input,
           {
             // Keyed on the RUN, plus the graph version.
             //
@@ -99,6 +105,17 @@ export default class AnalysisService {
             recursionLimit: 25,
           },
         );
+
+        // The graph did not finish - a node called ask_human and LangGraph parked
+        // the task on its checkpoint. Returning normally is deliberate: the
+        // BullMQ job completes and frees the worker, which matters because
+        // concurrency is 1 and a held job would stall every other dossier. The
+        // run is picked back up by answer(), whenever that happens to be.
+        if (isInterrupted(state)) {
+          await this.setStatus(runId, 'awaiting_human');
+          logger.info({ runId, tenderId }, 'analysis: waiting on the human');
+          return state;
+        }
 
         await this.analyses.saveResult(runId, {
           verdict: state.verdict ?? 'no-go',
@@ -114,20 +131,85 @@ export default class AnalysisService {
             .map((p) => ({ documentId: p.documentId, page: p.page })),
         });
 
-        await this.analyses.updateRun(runId, { status: 'done', finishedAt: new Date() });
+        await this.analyses.setPendingQuestion(runId, null);
+        await this.setStatus(runId, 'done', { finishedAt: new Date() });
         await this.tenders.updateStatus(tenderId, 'analyzed');
         logger.info({ runId, verdict: state.verdict }, 'analysis: done');
         return state;
       } catch (error) {
-        await this.analyses.updateRun(runId, {
-          status: 'failed',
-          error: error.message,
-          finishedAt: new Date(),
-        });
+        await this.setStatus(runId, 'failed', { error: error.message, finishedAt: new Date() });
         await this.tenders.updateStatus(tenderId, 'failed');
         throw error;
       }
     });
+  }
+
+  /**
+   * One status change, in the database and on the stream. Every transition goes
+   * through here so the live screen and the polled screen can never disagree
+   * about what a run is doing.
+   *
+   * @param {string} runId
+   * @param {string} status queued|running|awaiting_human|done|failed
+   * @param {object} [patch] extra columns to set in the same write
+   * @returns {Promise<void>}
+   */
+  async setStatus(runId, status, patch = {}) {
+    await this.analyses.updateRun(runId, { status, ...patch });
+    await publishRunEvent(runId, { type: 'status', status });
+  }
+
+  /**
+   * Records the human's answer and puts the run back on the queue.
+   *
+   * The answer is written to the trace BEFORE the job is enqueued, and that
+   * order is load-bearing: resuming re-executes the whole node, so ask_human
+   * runs again and reads its answer back out of the trace instead of stopping
+   * the run a second time.
+   *
+   * @param {string} runId
+   * @param {object} answer humanAnswerSchema, already validated
+   * @param {string} ownerId
+   * @returns {Promise<{ runId: string, status: string }>}
+   */
+  async answer(runId, answer, ownerId) {
+    const run = await this.findOwnedRun(runId, ownerId);
+    if (run.status !== 'awaiting_human' || !run.pendingQuestion) {
+      throw appError("Cette analyse n attend pas de reponse.", 'NO_PENDING_QUESTION', 409);
+    }
+    const pending = run.pendingQuestion;
+    if (answer.askId !== pending.askId) {
+      // The screen is answering a question this run has moved past.
+      throw appError('Cette question n est plus celle en attente.', 'STALE_QUESTION', 409);
+    }
+
+    await this.analyses.appendTrace(runId, {
+      node: pending.node,
+      at: new Date().toISOString(),
+      summary: pending.question,
+      status: 'human',
+      // askKey, not askId: the replayed node recomputes the key from the node and
+      // the question text, and cannot know the id we minted for the first pass.
+      askKey: pending.askKey,
+      choice: answer.choice,
+      choiceLabel: pending.options.find((o) => o.value === answer.choice)?.label ?? answer.choice,
+      instruction: answer.instruction ?? null,
+      verdictOverride: answer.verdictOverride ?? null,
+      dismissedBlockers: answer.dismissedBlockers ?? [],
+    });
+    await this.analyses.setPendingQuestion(runId, null);
+    await this.setStatus(runId, 'queued');
+
+    // A new jobId, or BullMQ would dedupe the resume against the job that just
+    // completed and nothing would ever pick the run back up.
+    await this.queue.add(
+      'analyze',
+      { runId, tenderId: run.tenderId, ownerId, resume: answer },
+      { jobId: analysisJobId(run.tenderId, GRAPH_VERSION, runId + ':' + answer.askId) },
+    );
+    logger.info({ runId, choice: answer.choice }, 'analysis: resumed by the human');
+
+    return { runId, status: 'queued' };
   }
 
   /**
@@ -158,6 +240,10 @@ export default class AnalysisService {
       finishedAt: run.finishedAt,
       error: run.error,
       nodeTrace: run.nodeTrace ?? [],
+      // Present only while the run is parked. It is what the screen renders the
+      // question and its options from after a refresh, when the stream that
+      // first announced it is long gone.
+      pendingQuestion: run.pendingQuestion ?? null,
       result: result ?? null,
       sections,
     };

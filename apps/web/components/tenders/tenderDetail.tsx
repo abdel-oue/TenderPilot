@@ -1,27 +1,44 @@
 "use client";
-// The review screen. Order on the page is deliberate and is the EX-04 user story:
-// verdict, then what blocks it, then what it could not read, then the evidence.
+// The review screen.
+//
+// The centre column is the analysis itself: press the button, watch the agent,
+// read the verdict. Everything the verdict is BUILT from — the blockers, the
+// matrix, the mémoire — sits on the right as three cards that open a panel.
+// That ordering is the EX-04 user story: decide first, check the evidence when
+// you want to argue with it.
+import { useState } from "react";
+import { AlertTriangle, FileText, Table2 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SlideOver } from "@/components/ui/slideOver";
 import AnalysisReasoning from "./analysisReasoning";
 import BlockerList from "./blockerList";
 import ComplianceMatrix from "./complianceMatrix";
 import SectionEditor from "./sectionEditor";
-import TracePanel from "./tracePanel";
 import UnreadPagesBanner from "./unreadPagesBanner";
-import UploadPanel from "./uploadPanel";
-import VerdictHeader from "./verdictHeader";
-import { useAnalysis } from "@/hooks/useAnalysis";
-import { useTender, useUploadTenderDocument } from "@/hooks/useTenders";
-import { TENDER_DOCUMENT_KINDS } from "@tenderpilot/shared";
+import { AnalysisStage } from "./analysisStage";
+import { useAnalysis, useAnswerQuestion, useStartAnalysis } from "@/hooks/useAnalysis";
+import { useRunStream } from "@/hooks/useRunStream";
+import { useRequirements, useTender } from "@/hooks/useTenders";
+import { CARD } from "@/lib/utils/workspaceStyleUtils";
+import { fadeUp, stagger } from "@/lib/utils/motionUtils";
+import { cn } from "@/lib/utils/classNameUtils";
 
 interface TenderDetailProps {
   tenderId: string;
 }
 
+type PanelKey = "blockers" | "matrix" | "memo";
+
 export default function TenderDetail({ tenderId }: TenderDetailProps) {
   const tender = useTender(tenderId);
   const analysis = useAnalysis(tenderId);
-  const upload = useUploadTenderDocument(tenderId);
+  const requirements = useRequirements(tenderId);
+  const start = useStartAnalysis(tenderId);
+  const answer = useAnswerQuestion(tenderId, analysis.data?.runId);
+  const liveTools = useRunStream(tenderId, analysis.data?.runId, analysis.data?.status);
+  const reduced = useReducedMotion();
+  const [panel, setPanel] = useState<PanelKey | null>(null);
 
   if (tender.isPending) return <Skeleton className="h-96 w-full" />;
   if (tender.isError) {
@@ -35,33 +52,114 @@ export default function TenderDetail({ tenderId }: TenderDetailProps) {
   const envelope = analysis.data ?? null;
   const result = envelope?.result ?? null;
 
+  const panels: { key: PanelKey; label: string; count: string; icon: typeof AlertTriangle }[] = [
+    {
+      key: "blockers",
+      label: "Points bloquants",
+      count: result ? `${result.blockers.length}` : "—",
+      icon: AlertTriangle,
+    },
+    {
+      key: "matrix",
+      label: "Matrice de conformité",
+      count: requirements.data ? `${requirements.data.length}` : "—",
+      icon: Table2,
+    },
+    {
+      key: "memo",
+      label: "Mémoire technique",
+      count: envelope ? `${envelope.sections.length}` : "—",
+      icon: FileText,
+    },
+  ];
+
   return (
-    <div className="space-y-8">
-      <VerdictHeader tenderId={tenderId} reference={tender.data.reference} analysis={envelope} />
+    <div className="grid items-start gap-6 lg:grid-cols-[1fr_17rem]">
+      <div className="min-w-0 space-y-5">
+        <AnalysisStage
+          reference={tender.data.reference}
+          analysis={envelope}
+          liveTools={liveTools}
+          starting={start.isPending}
+          startError={start.isError ? (start.error as Error).message : null}
+          onStart={() => start.mutate()}
+          answering={answer.isPending}
+          answerError={answer.isError ? (answer.error as Error).message : null}
+          onAnswer={(payload) => answer.mutate(payload)}
+        />
 
-      {/* EX-07 before anything derived from the text: what was not read changes
-          how much the rest is worth. */}
-      {result ? <UnreadPagesBanner unreadPages={result.unreadPages} /> : null}
+        {/* EX-07: what was not read changes how much the rest is worth, so it
+            sits with the verdict rather than behind a panel. */}
+        {result ? <UnreadPagesBanner unreadPages={result.unreadPages} /> : null}
+      </div>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">Points bloquants</h2>
+      <motion.aside
+        className="space-y-2 lg:sticky lg:top-20"
+        variants={stagger(reduced)}
+        initial="hidden"
+        animate="visible"
+        aria-label="Détail de l’analyse"
+      >
+        {panels.map((item) => (
+          <motion.button
+            key={item.key}
+            variants={fadeUp(reduced, 8)}
+            className={cn(
+              CARD,
+              "group flex w-full cursor-pointer items-center gap-3 p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+            disabled={!envelope}
+            data-testid={`panel-${item.key}`}
+            onClick={() => setPanel(item.key)}
+          >
+            <span className="shrink-0 rounded-lg bg-soft p-2 text-accent">
+              <item.icon size={16} strokeWidth={1.7} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium">{item.label}</span>
+              <span className="block text-mini text-muted">
+                {envelope ? `${item.count} élément(s)` : "Lancez l’analyse"}
+              </span>
+            </span>
+          </motion.button>
+        ))}
+
+        {/* The verdict's own derivation. Short enough to read in place — putting
+            it behind a fourth panel would hide the reasoning the score rests on. */}
+        {result ? <AnalysisReasoning result={result} /> : null}
+      </motion.aside>
+
+      <SlideOver
+        open={panel === "blockers"}
+        title="Points bloquants"
+        subtitle="Une capacité exigée que l’entreprise ne démontre pas. Chaque point cite sa page."
+        testId="slideover-blockers"
+        onClose={() => setPanel(null)}
+      >
         {result ? (
           <BlockerList blockers={result.blockers} />
         ) : (
           <p className="text-sm text-muted">Lancez l&apos;analyse pour les obtenir.</p>
         )}
-      </section>
+      </SlideOver>
 
-      {/* The verdict's own derivation, between the blockers and the evidence. */}
-      {result ? <AnalysisReasoning result={result} /> : null}
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">Matrice de conformité</h2>
+      <SlideOver
+        open={panel === "matrix"}
+        title="Matrice de conformité"
+        subtitle="Chaque exigence, sa source, et la raison pour laquelle le profil la couvre ou non."
+        testId="slideover-matrix"
+        onClose={() => setPanel(null)}
+      >
         <ComplianceMatrix tenderId={tenderId} />
-      </section>
+      </SlideOver>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">Mémoire technique</h2>
+      <SlideOver
+        open={panel === "memo"}
+        title="Mémoire technique"
+        subtitle="Le brouillon de l’agent. Corrigez une section et la suivante en tiendra compte."
+        testId="slideover-memo"
+        onClose={() => setPanel(null)}
+      >
         {envelope && envelope.sections.length > 0 ? (
           <div className="space-y-3">
             {envelope.sections.map((section) => (
@@ -79,28 +177,7 @@ export default function TenderDetail({ tenderId }: TenderDetailProps) {
             volontaire.
           </p>
         )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">Pièces du dossier</h2>
-        <ul className="space-y-1 text-sm text-muted">
-          {tender.data.documents.map((document) => (
-            <li key={document.id}>
-              {document.kind} · {document.originalName} · {document.pageCount} page(s) ·{" "}
-              {document.extractionPath}
-            </li>
-          ))}
-        </ul>
-        <UploadPanel
-          kinds={TENDER_DOCUMENT_KINDS}
-          busy={upload.isPending}
-          error={upload.isError ? (upload.error as Error).message : null}
-          submitLabel="Ajouter une pièce"
-          onSubmit={(files, kind) => upload.mutate({ file: files[0], kind })}
-        />
-      </section>
-
-      <TracePanel trace={envelope?.nodeTrace ?? []} status={envelope?.status ?? "aucune analyse"} />
+      </SlideOver>
     </div>
   );
 }

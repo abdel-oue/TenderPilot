@@ -63,6 +63,7 @@ qu'un appel d'outil aurait levé est une faute, pas de la prudence.
 | `get_current_date` | la date du jour | sans lui le modèle raisonne depuis sa date d'entraînement |
 | `simulate_score` | rejoue le verdict sous hypothèse | transforme un no-go en conseil actionnable |
 | `web_search` | Tavily, extraits ou page complète | marchés similaires attribués, contexte acheteur. **Absent si aucune clé** |
+| `ask_human` | pose une question au dirigeant et **suspend l'analyse** | ce que ni le dossier ni le profil ne peuvent trancher : une certification détenue mais non jointe, un arbitrage commercial |
 
 Trois outils écartés volontairement : un scraper de marchespublics.gov.ma (HTML
 fragile, casse en démo), une traduction FR/AR (spéculatif tant qu'aucun dossier
@@ -101,6 +102,54 @@ outil cassé dégrade une étape, il ne tue pas un dossier.
 `web_search` n'est pas enregistré du tout sans `TAVILY_API_KEY` — le modèle ne peut
 pas appeler quelque chose qui échouerait. Et si Tavily tombe, la réponse est
 « recherche indisponible », jamais une liste vide qui se lirait comme « rien n'existe ».
+
+## L'humain dans la boucle
+
+`ask_human` est un outil, pas une arête du graphe, et la différence est le sujet :
+**c'est l'agent qui décide quand il a besoin de vous**. Personne ne coche une case
+avant de lancer l'analyse pour choisir où elle s'arrêtera ; le modèle appelle
+l'outil au moment où la réponse changerait sa conclusion, et l'analyse s'arrête là.
+
+Il n'est offert qu'au Matcher et au Writer, les deux agents qui portent la
+ceinture — `ingest` n'a rien à demander avant d'avoir lu quoi que ce soit.
+
+La question arrive avec **ses réponses possibles**. Un champ libre seul ferait
+porter au lecteur la charge de deviner ce que le modèle sait traiter, alors que le
+modèle, lui, le sait au moment où il demande. Le dirigeant choisit une option, et
+peut y ajouter une consigne, écarter un point bloquant mal jugé, ou forcer le
+verdict.
+
+**Borné dans le code, jamais dans un prompt** — `MAX_HUMAN_ASKS = 3`, exactement
+comme `MAX_REDRAFTS`. Un modèle à qui l'on demande « ne pose une question que si
+c'est nécessaire » en posera onze sur le dossier qu'on est en train de démontrer,
+et chaque question arrête le dossier net.
+
+### Ce qui se passe techniquement
+
+`interrupt()` de LangGraph **lève une exception**, et le graphe est entièrement
+construit autour de catch-all qui transforment une exception en étape dégradée.
+Trois d'entre eux se trouvaient entre l'outil et LangGraph — `tools.service.js`,
+`matchProfile.node.js`, `draft.node.js` — plus le `traced()` du graphe. Avalée à
+l'un de ces endroits, la pause devient une étape en erreur et **l'agent répond
+seul au dossier sans jamais avoir été contredit**. Les quatre laissent désormais
+passer ce qui remonte (`isGraphBubbleUp`), et c'est la seule ligne qui tienne
+vraiment la fonctionnalité debout.
+
+Le run passe en `awaiting_human`, la question est écrite dans
+`analysis_runs.pending_question`, **et le job BullMQ se termine normalement**. La
+concurrence du worker est à 1 : un job gardé ouvert en attendant une réponse
+humaine bloquerait tous les autres dossiers. La réponse écrit une entrée `human`
+dans la trace, remet un job en file, et le graphe repart de son point de
+contrôle avec `new Command({ resume })`.
+
+Reprendre **réexécute le nœud entier** — c'est ainsi que LangGraph rejoue une
+tâche. La même question revient donc, et `ask_human` la retrouve dans la trace
+(clé = hachage du nœud + du texte) au lieu d'arrêter le run une seconde fois. Un
+modèle qui reformule sa question en pose donc une vraie nouvelle, plutôt que
+d'hériter silencieusement de la réponse à une autre.
+
+Sans réponse, le run attend. Indéfiniment : le point de contrôle est dans
+Postgres, et le dossier reste répondable des jours plus tard.
 
 ## La règle qui décide d'un no-go
 
@@ -173,8 +222,18 @@ et non dans chaque nœud : ajouter un nœud ne peut pas oublier de tracer.
 ```
 
 Cette trace vit dans `analysis_runs.node_trace`, donc elle survit à un
-rafraîchissement de page et reste lisible après coup. C'est ce que l'interface
-affiche en direct.
+rafraîchissement de page et reste lisible après coup.
+
+Mais une entrée n'est écrite **qu'à la fin du nœud**. `matchProfile` appelle dix
+outils en vingt secondes, et pendant ces vingt secondes la trace ne dit rien,
+puis dit tout d'un coup. C'est pourquoi chaque appel d'outil est aussi publié
+**au moment où il rend la main**, sur Redis, et relayé au navigateur en SSE
+(`GET /tenders/:id/analysis/stream`).
+
+Le flux est un miroir, jamais une source de vérité : tout ce qu'il transporte est
+déjà en base et arrive de toute façon sur le sondage d'une seconde. Un flux coupé,
+un Redis absent ou un proxy qui n'aime pas SSE ramènent l'écran à ce qu'il faisait
+avant — une seconde de retard, pas une information perdue.
 
 Chaque exigence porte sa page source et sa citation verbatim. Une affirmation sans
 page source est un risque d'hallucination : ici la page est portée depuis

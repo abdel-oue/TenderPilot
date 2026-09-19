@@ -10,7 +10,7 @@ export const TENDERS = [
 // A finished no-go run: the fixture the detail screen is built for. `AO-2026-002`
 // is the dossier the README documents as a no-go, so the numbers match the product.
 export const ANALYSIS = {
-  runId: "r2", tenderId: "t2", status: "done", error: null,
+  runId: "r2", tenderId: "t2", status: "done", error: null, pendingQuestion: null,
   nodeTrace: [
     { node: "ingest", at: "2026-09-12T09:00:00.000Z", summary: "4 pages lues, dont 4 par OCR", status: "ok", ms: 34042 },
     { node: "extractRequirements", at: "2026-09-12T09:00:34.000Z", summary: "11 exigences extraites", status: "ok", ms: 13228 },
@@ -31,6 +31,23 @@ export const ANALYSIS = {
   },
   sections: [{ id: "s1", sectionKey: "methodologie", title: "Méthodologie", content: "Notre approche se déroule en trois phases.", editedByHuman: false }],
 };
+// The same run, parked on a question the agent asked. `pendingQuestion` is what
+// the screen renders the pause from after a refresh, when the stream that first
+// announced it is long gone.
+export const PENDING_QUESTION = {
+  askId: "ask-1",
+  askKey: "abc123",
+  node: "matchProfile",
+  question: "Detenez-vous la certification ISO 22301, meme non jointe au dossier ?",
+  raison: "Pour ne pas vous ecarter sur une certification que vous avez peut-etre.",
+  options: [
+    { value: "oui", label: "Oui, nous la detenons" },
+    { value: "non", label: "Non" },
+    { value: "inconnu", label: "Je ne sais pas" },
+  ],
+  askedAt: "2026-09-12T09:00:50.000Z",
+};
+
 export const REQUIREMENTS = [
   { id: "q2", tenderId: "t2", text: "Fournir une attestation fiscale de moins de trois mois.", obligation: "obligatoire", category: "administratif", nature: "document", sourcePage: 3, sourceArticle: "2.1", sourceDocumentId: "d1", quote: "attestation fiscale de moins de trois mois", match: { requirementId: "q2", status: "met", evidence: ["REF-01"], reason: "Attestation fiscale du 12/08/2026 présente au dossier entreprise.", confidence: 0.91 } },
   { id: "q1", tenderId: "t2", text: "Le candidat doit être titulaire de la certification ISO 22301:2019.", obligation: "eliminatoire", category: "capacite", nature: "capacite", sourcePage: 7, sourceArticle: "4.2", sourceDocumentId: "d1", quote: "titulaire de la certification ISO 22301:2019", match: { requirementId: "q1", status: "unmet", evidence: [], reason: "Aucune certification ISO 22301 dans le profil : ISO 9001, ISO 27001 et Qualiopi uniquement.", confidence: 0.88 } },
@@ -55,7 +72,7 @@ export const COMPANY_DOCUMENTS = [
 ];
 interface MockOptions { signedIn?: boolean; empty?: boolean; failTenders?: boolean; loginFailure?: boolean; uploadFailure?: boolean; analysis?: Envelope; requirements?: typeof REQUIREMENTS; saveFailure?: boolean; company?: boolean }
 export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
-  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, posts: [] as string[], patches: [] as unknown[] };
+  const state = { signedIn: options.signedIn ?? true, empty: options.empty ?? false, failTenders: options.failTenders ?? false, loginFailure: options.loginFailure ?? false, uploadFailure: options.uploadFailure ?? false, saveFailure: options.saveFailure ?? false, analysis: (options.analysis ?? null) as Envelope, requirements: options.requirements ?? [], company: options.company ?? false, posts: [] as string[], patches: [] as unknown[], answers: [] as unknown[] };
   // The Next dev overlay button sits in the bottom-left corner, on top of the rail's
   // account control. It only exists under `next dev`, so hide it for the whole run.
   await page.addInitScript(() => {
@@ -86,7 +103,26 @@ export async function mockWorkspaceApi(page: Page, options: MockOptions = {}) {
       state.analysis = { ...ANALYSIS, status: "queued", nodeTrace: [], result: null, sections: [] };
       return send({ runId: "r2", status: "queued" });
     }
+    // The live stream, stubbed as one frame and then silence. The screen must
+    // stay correct on the poll alone, so a stream that says nothing is exactly
+    // the condition worth holding the specs to.
+    if (path.endsWith("/analysis/stream")) {
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        body: `data: ${JSON.stringify({ type: "status", status: state.analysis?.status ?? "queued" })}
+
+`,
+      });
+    }
     if (path.endsWith("/analysis")) return state.analysis ? send(state.analysis) : send({ error: "Aucune analyse", code: "ANALYSIS_NOT_FOUND" }, 404);
+    if (path.endsWith("/answer") && method === "POST") {
+      state.answers.push(route.request().postDataJSON());
+      // Mirrors the api: the answer is recorded, the run goes back on the queue,
+      // and the graph resumes from its checkpoint in the worker.
+      state.analysis = { ...(state.analysis ?? ANALYSIS), status: "queued", pendingQuestion: null };
+      return send({ runId: "r2", status: "queued" }, 202);
+    }
     if (path.endsWith("/requirements")) return send({ requirements: state.requirements, rubric: [] });
     if (path.endsWith("/sections") && method === "PATCH") {
       if (state.saveFailure) return send({ error: "Enregistrement impossible.", code: "SAVE_FAILED" }, 503);
