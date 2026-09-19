@@ -8,6 +8,7 @@
 // Safe to re-run: only chunks with a NULL embedding are touched, so a second run
 // on an already-indexed corpus costs one query.
 //
+// Indexes every document the user owns - the company corpus AND the dossiers.
 // Indexes the demo user's corpus by default, or the user whose email is passed:
 //   npm run db:index -- someone@example.com
 
@@ -25,7 +26,7 @@ async function main() {
   if (!user) throw new Error(`no user with email ${email} - run db:seed first`);
 
   logger.info({ email }, 'index: starting');
-  const summary = await new IndexingService().indexCompanyCorpus(user.id);
+  const summary = await new IndexingService().indexCorpus(user.id);
 
   if (summary.embedded === 0 && summary.documents > 0) {
     // Not an error - it is what an already-indexed corpus looks like - but worth

@@ -85,6 +85,22 @@ export default class DocumentRepository {
   }
 
   /**
+   * Everything this user owns, dossier documents included - the work list for
+   * `npm run db:index`. findCompanyDocuments deliberately excludes dossiers
+   * because the UI and the Writer's company corpus both mean company-only; the
+   * indexer means all of them, or the dossier corpus stays unsearchable.
+   * @param {string} ownerId
+   * @returns {Promise<object[]>}
+   */
+  async findOwnedDocuments(ownerId) {
+    return this.db
+      .select()
+      .from(documents)
+      .where(eq(documents.ownerId, ownerId))
+      .orderBy(asc(documents.createdAt));
+  }
+
+  /**
    * Upserts on (ownerId, contentHash), so re-seeding or re-uploading the same
    * file is a no-op rather than a duplicate row.
    * @param {object} values

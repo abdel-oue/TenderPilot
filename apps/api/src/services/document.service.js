@@ -3,9 +3,10 @@
  * Uploading documents in, and reading them back out: metadata, extracted pages,
  * and the original file.
  *
- * Extraction itself is NOT here. A dossier document is read by the graph's ingest
- * node when the analysis runs; a company document is read by the indexing worker.
- * Either way it is a minute of OCR, which is not something a POST waits on.
+ * Extraction itself is NOT here. Every upload is handed to the indexing worker,
+ * which reads it and embeds it; a dossier document is read again by the graph's
+ * ingest node when the analysis runs, off the same content-hash cache. Either
+ * way it is a minute of OCR, which is not something a POST waits on.
  */
 import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
@@ -35,9 +36,12 @@ export default class DocumentService {
    * upserted on (ownerId, contentHash): re-uploading the same file updates it
    * rather than creating a twin, and the hash is already the parse-cache key.
    *
-   * A COMPANY document (tenderId null) is queued for indexing immediately -
-   * that is what makes it citable by the Writer. A DOSSIER document is not: the
-   * analysis run reads it, and indexing it here would OCR it twice.
+   * EVERY document is queued for indexing, dossier ones included. Indexing a
+   * dossier document used to look like paying for OCR twice, so it was skipped -
+   * but the chunks the analysis writes carry no embedding, and nothing else ever
+   * filled them, so search_documents(corpus='dossier') could only ever return
+   * zero rows. It costs nothing to do here: ingest is cached on the content hash
+   * and the indexer only looks at chunks whose embedding is still NULL.
    *
    * @param {object} input
    * @param {Buffer} input.buffer
@@ -61,13 +65,7 @@ export default class DocumentService {
       pageCount: 0,
     });
 
-    if (tenderId === null) {
-      await this.queue.add(
-        'index',
-        { document },
-        { jobId: indexJobId(document.id) },
-      );
-    }
+    await this.queue.add('index', { document }, { jobId: indexJobId(document.id) });
 
     logger.info({ documentId: document.id, kind, tenderId }, 'document: uploaded');
     return this.toPublic(document);

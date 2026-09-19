@@ -68,13 +68,13 @@ export default class IndexingService {
   }
 
   /**
-   * Indexes this user's whole company corpus. Idempotent: an already-embedded
-   * document costs one query and nothing else.
+   * Indexes everything this user owns - company documents AND dossier ones.
+   * Idempotent: an already-embedded document costs one query and nothing else.
    * @param {string} ownerId
    * @returns {Promise<{ documents: number, embedded: number, failed: object[] }>}
    */
-  async indexCompanyCorpus(ownerId) {
-    const corpus = await this.documents.findCompanyDocuments(ownerId);
+  async indexCorpus(ownerId) {
+    const corpus = await this.documents.findOwnedDocuments(ownerId);
     const summary = { documents: 0, embedded: 0, failed: [] };
 
     for (const document of corpus) {
