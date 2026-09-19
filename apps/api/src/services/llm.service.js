@@ -18,6 +18,8 @@ import { logger } from '../lib/logger.js';
 import { getContext } from '../lib/requestContext.js';
 import UsageRepository from '../repositories/usage.repository.js';
 import AzureOpenAiService from './azureOpenai.service.js';
+import { z } from 'zod';
+import { renderOutputContract } from '../prompts/schema.prompts.js';
 
 export const TIERS = { REASONING: 'reasoning', VOLUME: 'volume' };
 
@@ -127,7 +129,7 @@ export default class LlmService {
     if (!provider) throw appError('Unknown model tier: ' + tier, 'UNKNOWN_TIER', 500);
 
     const messages = [
-      { role: 'system', content: system },
+      { role: 'system', content: system + renderOutputContract(z.toJSONSchema(schema, { unrepresentable: 'any' })) },
       { role: 'user', content: user },
     ];
 

@@ -93,21 +93,21 @@ export default class AnalysisService {
         const graph = await this.getGraph();
         // A resume hands LangGraph the human's answer instead of a fresh input;
         // the checkpoint under the thread key below supplies everything else.
-        const input = resumeWith ? new Command({ resume: resumeWith }) : { tenderId, runId, ownerId };
-        const state = await graph.invoke(
-          input,
-          {
-            // Keyed on the RUN, plus the graph version.
-            //
-            // runId is what makes this correct: every start() mints a new run, so
-            // a thread keyed on the tender alone meant a re-analysis resumed the
-            // PREVIOUS run's finished checkpoint instead of running. The version
-            // is still in the key so a checkpoint from an older graph shape is
-            // never resumed into a newer one.
-            configurable: { thread_id: `${tenderId}:${runId}:${GRAPH_VERSION}` },
-            recursionLimit: 25,
-          },
-        );
+        const config = { configurable: { thread_id: `${tenderId}:${runId}:${GRAPH_VERSION}` }, recursionLimit: 25 };
+        const checkpoint = !resumeWith && graph.getState ? await graph.getState(config) : null;
+        const resumedRun = resumeWith ? await this.analyses.findRunById(runId) : null;
+        const humanDecisions = (resumedRun?.nodeTrace ?? []).filter((entry) => entry.status === 'human');
+        const hasPendingCheckpoint = Boolean(checkpoint?.next?.length);
+
+        let input;
+        if (resumeWith) input = new Command({ resume: resumeWith, update: { humanDecisions } });
+        else if (hasPendingCheckpoint) input = null;
+        else input = { tenderId, runId, ownerId };
+
+        // A completed checkpoint can also outlive a failed result write. Persist
+        // its result on retry without running the providers a second time.
+        const hasFinishedCheckpoint = checkpoint?.values?.runId === runId && checkpoint.next?.length === 0;
+        const state = hasFinishedCheckpoint ? checkpoint.values : await graph.invoke(input, config);
 
         // The graph did not finish - a node called ask_human and LangGraph parked
         // the task on its checkpoint. Returning normally is deliberate: the
@@ -132,6 +132,13 @@ export default class AnalysisService {
           unreadPages: (state.pages ?? [])
             .filter((p) => p.extraction === 'unread')
             .map((p) => ({ documentId: p.documentId, page: p.page })),
+          // The failures the graph accumulated, stored with the verdict they
+          // qualify. Dropping them here is what let a run whose extraction died
+          // be saved as a finished analysis with nothing to show for it.
+          stageErrors: state.errors ?? [],
+          // decide() sets this whenever eligibility could not be settled. It is
+          // stored rather than recomputed so the UI and the export agree.
+          needsHuman: Boolean(state.needsHuman || (state.errors ?? []).length || (state.sections ?? []).some((s) => s.needsHuman)),
         });
 
         await this.analyses.setPendingQuestion(runId, null);
@@ -184,6 +191,9 @@ export default class AnalysisService {
     if (answer.askId !== pending.askId) {
       // The screen is answering a question this run has moved past.
       throw appError('Cette question n est plus celle en attente.', 'STALE_QUESTION', 409);
+    }
+    if (!pending.options.some((option) => option.value === answer.choice)) {
+      throw appError('Reponse absente des choix proposes.', 'INVALID_CHOICE', 400);
     }
 
     await this.analyses.appendTrace(runId, {
@@ -252,6 +262,33 @@ export default class AnalysisService {
     };
   }
 
+  /** Apply an explicit review of a completed run, then resume at the decision edge.
+   * @param {string} runId @param {object} decision @param {string} ownerId @returns {Promise<object>}
+   */
+  async reviewDecision(runId, decision, ownerId) {
+    const run = await this.findOwnedRun(runId, ownerId);
+    if (run.status !== 'done' || run.graphVersion !== GRAPH_VERSION) {
+      throw appError('Relancez une analyse terminee avec la version actuelle avant arbitrage.', 'RUN_NOT_REVIEWABLE', 409);
+    }
+    const graph = await this.getGraph();
+    const config = { configurable: { thread_id: `${run.tenderId}:${runId}:${GRAPH_VERSION}` } };
+    const checkpoint = await graph.getState(config);
+    if (checkpoint.values?.runId !== runId || checkpoint.next?.length) {
+      throw appError('Point de reprise termine indisponible.', 'CHECKPOINT_UNAVAILABLE', 409);
+    }
+    const known = new Set((checkpoint.values.blockers ?? []).map((b) => b.requirementId));
+    if ((decision.dismissedBlockers ?? []).some((id) => !known.has(id))) {
+      throw appError('Point bloquant inconnu pour cette analyse.', 'UNKNOWN_BLOCKER', 400);
+    }
+    const entry = { ...decision, node: 'decide', status: 'human', at: new Date().toISOString(), summary: 'Arbitrage humain : ' + decision.instruction };
+    await this.analyses.appendTrace(runId, entry);
+    await graph.updateState(config, { humanDecisions: [...(checkpoint.values.humanDecisions ?? []), entry] }, 'computeScore');
+    await this.setStatus(runId, 'queued', { finishedAt: null });
+    await this.queue.add('analyze', { runId, tenderId: run.tenderId, ownerId },
+      { jobId: analysisJobId(run.tenderId, GRAPH_VERSION, runId + randomUUID()) });
+    return { runId, status: 'queued' };
+  }
+
   /**
    * Every run this user has launched - the Controle screen's list.
    * @param {string} ownerId
@@ -315,13 +352,19 @@ export default class AnalysisService {
    */
   async saveSectionEdit(runId, input, ownerId) {
     await this.findOwnedRun(runId, ownerId);
-
+    const existing = (await this.analyses.findSections(runId)).find((s) => s.sectionKey === input.sectionKey);
+    if (!existing) throw appError('Section introuvable.', 'SECTION_NOT_FOUND', 404);
+    // Saving text and approving it are different actions. Only explicit validation
+    // resolves the objection; an ordinary save keeps it visible.
     return this.analyses.upsertSection({
       runId,
       sectionKey: input.sectionKey,
       title: input.title,
       content: input.content,
       editedByHuman: true,
+      validatedByHuman: input.validatedByHuman === true,
+      complianceWarnings: input.validatedByHuman ? [] : existing.complianceWarnings ?? [],
+      needsHuman: input.validatedByHuman !== true,
     });
   }
 

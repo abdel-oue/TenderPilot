@@ -8,11 +8,8 @@
  * is why every failure below is swallowed rather than surfaced: a dropped event
  * costs a second of freshness, and killing an analysis over it would be worse.
  *
- * Why a tool event exists at all: `traced()` writes one trace row per NODE, so a
- * node that calls six tools over twenty seconds is silent and then says
- * everything at once. The tool event fires from the dispatch site the moment one
- * tool returns, which is the only way the reader sees the agent working rather
- * than the agent having worked.
+ * Tool events fire at start and completion. The active trace row also retains
+ * each transition, so a refreshed browser recovers it through polling.
  */
 import Redis from 'ioredis';
 import { env } from './env.js';
@@ -76,8 +73,8 @@ export async function publishRunEvent(runId, event) {
  * @returns {Promise<() => Promise<void>>} unsubscribe
  */
 export async function subscribeRunEvents(runId, onEvent) {
-  const subscriber = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-  await subscriber.subscribe(channel(runId));
+  const subscriber = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1, connectTimeout: 2_000, commandTimeout: 3_000 });
+  subscriber.on('error', (error) => logger.debug({ err: error.message }, 'runEvents: subscriber connection error'));
   subscriber.on('message', (_channel, payload) => {
     try {
       onEvent(JSON.parse(payload));
@@ -86,6 +83,12 @@ export async function subscribeRunEvents(runId, onEvent) {
       // to tear down a stream that is otherwise delivering.
     }
   });
+  try {
+    await subscriber.subscribe(channel(runId));
+  } catch (error) {
+    subscriber.disconnect();
+    throw error;
+  }
   return async () => {
     try {
       await subscriber.quit();

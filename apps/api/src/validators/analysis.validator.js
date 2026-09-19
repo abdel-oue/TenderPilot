@@ -14,6 +14,7 @@ const sectionEditSchema = z.object({
   sectionKey: z.string().min(1).max(64),
   title: z.string().min(1).max(200),
   content: z.string().min(1).max(50_000),
+  validatedByHuman: z.boolean().optional(),
 });
 
 /**
@@ -56,4 +57,15 @@ export function parseSectionEditBody(body) {
  */
 export function parseHumanAnswerBody(body) {
   return parse(humanAnswerSchema, body);
+}
+
+const decisionSchema = z.object({
+  verdictOverride: z.enum(['go', 'no-go']),
+  instruction: z.string().trim().min(10).max(2000),
+  dismissedBlockers: z.array(z.string()).max(50).default([]),
+});
+
+/** @param {unknown} body @returns {object} */
+export function parseDecisionBody(body) {
+  return parse(decisionSchema, body);
 }

@@ -114,6 +114,10 @@ export default class AzureOpenAiService {
     const latencyMs = Date.now() - startedAt;
 
     const message = response.choices[0]?.message;
+    const finish = response.choices[0]?.finish_reason;
+    if (finish === 'length' || finish === 'content_filter') {
+      throw new Error(`Reponse du modele incomplete (${finish}). Analyse a reprendre.`);
+    }
 
     return {
       content: message?.content ?? '',

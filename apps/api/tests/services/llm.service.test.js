@@ -59,6 +59,12 @@ function build(provider, tier = TIERS.VOLUME) {
 }
 
 describe('LlmService.complete', () => {
+  it('sends the complete schema before the first call, not only after a failure', async () => {
+    const provider = fakeProvider(['{"answer":"oui"}']);
+    const { service } = build(provider);
+    await service.complete({ name: 'test', system: 's', user: 'u', schema });
+    expect(provider.calls[0].messages[0].content).toContain('"required":["answer"]');
+  });
   it('returns the parsed value on a valid response', async () => {
     const { service } = build(fakeProvider(['{"answer":"oui"}']));
     const result = await service.complete({ name: 'test', system: 's', user: 'u', schema });

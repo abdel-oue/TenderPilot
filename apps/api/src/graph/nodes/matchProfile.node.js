@@ -2,8 +2,11 @@
 
 import { isGraphBubbleUp } from '@langchain/langgraph';
 import MatcherAgent from '../../agents/matcher.agent.js';
+import EvidenceAgent from '../../agents/evidence.agent.js';
+import { evidenceCatalog, validateMatchEvidence } from '../../lib/evidence.js';
 
 const matcher = new MatcherAgent();
+const reviewer = new EvidenceAgent();
 import CompanyRepository from '../../repositories/company.repository.js';
 
 const companies = new CompanyRepository();
@@ -53,7 +56,22 @@ export async function matchProfile(state) {
       },
       'matchProfile: done',
     );
-    return { matches, toolCalls };
+    const checked = validateMatchEvidence(state.requirements, matches, evidenceCatalog({ profile, references, team }, toolCalls));
+    if (checked.candidates.length) {
+      const { reviews } = await reviewer.review(checked.candidates);
+      for (const candidate of checked.candidates) {
+        const target = checked.matches.find((m) => m.requirementId === candidate.requirement.id);
+        const findings = reviews.filter((r) => r.requirementId === target.requirementId);
+        const supported = findings.length === 1 && findings[0].supported;
+        target.evidenceValidated = supported;
+        if (!supported) {
+          target.status = 'unknown';
+          target.confidence = 0;
+          target.reason = 'Controle des preuves : ' + (findings[0]?.reason ?? 'avis absent, controle humain requis.');
+        }
+      }
+    }
+    return { matches: checked.matches, toolCalls };
   } catch (error) {
     // ask_human suspended the run - not a failure, and swallowing it here would
     // hand the graph an empty match set as though the agent had found nothing.

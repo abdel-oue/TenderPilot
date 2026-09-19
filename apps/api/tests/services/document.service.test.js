@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Job } from 'bullmq';
 
 // saveUpload writes bytes to disk and hashes them. Stubbed: what is under test
 // is what happens to the row afterwards, not the filesystem.
@@ -12,7 +13,11 @@ const { default: DocumentService } = await import('../../src/services/document.s
 /** Captures what was queued. The queue's job here is to be called, not to run. */
 function fakeQueue() {
   const added = [];
-  return { added, async add(name, payload, options) { added.push({ name, payload, options }); } };
+  return { added, async add(name, payload, options) {
+    // Exercise the installed BullMQ validator: a permissive double hid the upload bug.
+    Job.prototype.validateOptions.call({ opts: options }, { data: JSON.stringify(payload) });
+    added.push({ name, payload, options });
+  } };
 }
 
 let queue;

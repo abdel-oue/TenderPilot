@@ -58,11 +58,25 @@ export async function draft(state) {
     ? await analyses.findHumanEditsForTender(state.tenderId)
     : [];
 
-  const sections = [];
+  // A retry only rewrites rejected sections. Accepted sections retain their evidence.
+  const retrying = (state.rejected ?? []).length > 0;
+  const sections = retrying ? [...(state.sections ?? [])] : [];
   const errors = [];
   const toolCalls = [];
 
   for (const section of plan) {
+    if (retrying && !state.rejected.some((r) => r.key === section.key)) continue;
+    const human = humanEdits.find((e) => e.sectionKey === section.key);
+    if (human) {
+      sections.push({
+        key: section.key, title: human.title, content: human.content,
+        citations: [], toolCalls: [], editedByHuman: true,
+        validatedByHuman: human.runId === state.runId && Boolean(human.validatedByHuman),
+        needsHuman: human.runId !== state.runId || !human.validatedByHuman,
+        complianceWarnings: human.runId === state.runId ? (human.complianceWarnings ?? []) : ['Texte humain conserve : verifier son adequation aux exigences de cette nouvelle analyse.'],
+      });
+      continue;
+    }
     // A section sent back by Compliance carries its instructions; a fresh one
     // does not.
     const instructions = state.redraftInstructions?.[section.key] ?? null;
@@ -82,8 +96,7 @@ export async function draft(state) {
       });
       toolCalls.push(...drafted.toolCalls.map((call) => ({ ...call, section: section.key })));
     } catch (error) {
-      // ask_human suspended the run: LangGraph has to see this, and the sections
-      // already drafted are on the checkpoint, so nothing is lost by leaving.
+      // LangGraph resumes at the node boundary; this node is replayed on resume.
       if (isGraphBubbleUp(error)) throw error;
       errors.push({ node: 'draft', message: section.key + ': ' + error.message });
       logger.error({ section: section.key, err: error.message }, 'draft: failed');

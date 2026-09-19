@@ -48,11 +48,17 @@ export function analysisJobId(tenderId, graphVersion, runId) {
 /**
  * Deduplicates on the document itself, so uploading the same file twice in a row
  * queues one indexing job, not two.
+ *
+ * NO COLON. BullMQ rejects a custom job id containing ':' unless it has exactly
+ * three segments - it reserves that shape for repeatable jobs - so 'index:<uuid>'
+ * threw inside queue.add() and every upload 500'd after the file and the row had
+ * already been written. A hyphen carries the same prefix and no meaning to BullMQ.
+ *
  * @param {string} documentId
  * @returns {string}
  */
 export function indexJobId(documentId) {
-  return 'index:' + documentId;
+  return 'index-' + documentId;
 }
 
 /** @returns {Promise<void>} */

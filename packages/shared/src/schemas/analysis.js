@@ -33,7 +33,7 @@ export const runStatusSchema = z.enum(['queued', 'running', 'awaiting_human', 'd
 
 // 'human' marks the answer a person gave, recorded in the same trace as the
 // agent's own steps so the conversation reads in order after the fact.
-export const traceStatusSchema = z.enum(['ok', 'error', 'retry', 'human']);
+export const traceStatusSchema = z.enum(['ok', 'error', 'retry', 'human', 'running', 'paused']);
 
 // What the agent asks. `options` is what makes this renderable: a free-text
 // question would put the burden of guessing the accepted answers on the reader,
@@ -68,6 +68,13 @@ export const humanAnswerSchema = z.object({
 export const runEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('node'),
+    tools: z.array(z.object({
+      id: z.string().optional(), name: z.string(), raison: z.string().nullable(), outcome: z.string(),
+      startedAt: z.string().optional(), at: z.string().optional(), ms: z.number().optional(),
+      status: z.enum(['running', 'ok', 'error', 'paused']).optional(),
+    })).optional(),
+    id: z.string().optional(),
+    startedAt: z.string().optional(),
     node: z.string(),
     status: traceStatusSchema,
     summary: z.string(),
@@ -76,6 +83,9 @@ export const runEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('tool'),
+    id: z.string().optional(),
+    startedAt: z.string().optional(),
+    status: z.enum(['running', 'ok', 'error', 'paused']).optional(),
     node: z.string(),
     name: z.string(),
     raison: z.string().nullable(),
@@ -92,6 +102,8 @@ export const verdictSchema = z.object({
   confidence: z.number().min(0).max(1),
   justification: z.string().min(1),
   blockers: z.array(blockerSchema),
+  needsHuman: z.boolean().default(false),
+  stageErrors: z.array(z.object({ node: z.string(), message: z.string() })).default([]),
 });
 
 export const analysisSchema = verdictSchema.extend({
@@ -106,6 +118,8 @@ export const analysisSchema = verdictSchema.extend({
   status: runStatusSchema,
   nodeTrace: z.array(
     z.object({
+      id: z.string().optional(),
+      startedAt: z.string().optional(),
       node: z.string(),
       at: z.string(),
       summary: z.string(),
@@ -114,6 +128,11 @@ export const analysisSchema = verdictSchema.extend({
       tools: z
         .array(
           z.object({
+            id: z.string().optional(),
+            at: z.string().optional(),
+            startedAt: z.string().optional(),
+            ms: z.number().optional(),
+            status: z.enum(['running', 'ok', 'error', 'paused']).optional(),
             name: z.string(),
             // The model's own words for why it reached for this tool.
             raison: z.string().nullable(),

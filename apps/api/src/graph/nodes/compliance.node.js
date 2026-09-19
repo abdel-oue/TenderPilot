@@ -31,27 +31,41 @@ export async function reviewSections(state) {
   const errors = [];
 
   for (const section of state.sections ?? []) {
+    // Human text remains verbatim; a new run asks for explicit revalidation.
+    if (section.editedByHuman) {
+      approved.push(section);
+      continue;
+    }
     const attempts = redraftCount[section.key] ?? 0;
 
     // Deterministic first: a fabricated REF-xx needs no judgement call, and
     // must not depend on one.
     let verdict = ComplianceAgent.checkCitations(section);
+    // A reviewer that never ran is not a reviewer that passed. When the model
+    // call fails the section is KEPT - redrafting it would only burn attempts
+    // on an outage - but it is kept unapproved and flagged, so nothing
+    // downstream can read the absence of an objection as a clean bill.
+    let unreviewable = false;
 
     if (!verdict) {
       try {
-        verdict = await compliance.review(section);
+        verdict = await compliance.review(section, (state.requirements ?? []).filter((r) => r.category === section.key));
       } catch (error) {
-        // A failing reviewer must not silently approve. It approves nothing and
-        // says why.
         errors.push({ node: 'compliance', message: section.key + ': ' + error.message });
-        verdict = { approved: true, reasons: ['controle indisponible'], instructions: '' };
+        unreviewable = true;
+        verdict = {
+          approved: false,
+          reasons: ['Controle de conformite indisponible : ' + error.message],
+          instructions: '',
+        };
       }
     }
 
-    if (verdict.approved || attempts >= MAX_REDRAFTS) {
+    if (verdict.approved || unreviewable || attempts >= MAX_REDRAFTS) {
       if (!verdict.approved) {
-        // Out of attempts: keep the section, but keep the objection attached to
-        // it so the human reviewing it sees exactly what was never fixed.
+        // Out of attempts, or never reviewed: keep the section, but keep the
+        // objection attached to it so the human reviewing it sees exactly what
+        // was never fixed.
         section.complianceWarnings = verdict.reasons;
         section.needsHuman = true;
       }
@@ -76,13 +90,24 @@ export async function reviewSections(state) {
         sectionKey: section.key,
         title: section.title,
         content: section.content,
-        editedByHuman: false,
+        editedByHuman: section.editedByHuman ?? false,
+        validatedByHuman: section.validatedByHuman ?? false,
+        // The objection and the flag go to the DB with the text they are about.
+        // They used to live only on this in-memory object, so the review UI and
+        // the DOCX export - which both read the row - could not tell a section
+        // that survived an unfixed objection from one that passed.
+        complianceWarnings: section.complianceWarnings ?? [],
+        needsHuman: section.needsHuman ?? false,
       });
     }
   }
 
   logger.info(
-    { approved: approved.length, rejected: rejected.length },
+    {
+      approved: approved.length,
+      rejected: rejected.length,
+      flagged: approved.filter((section) => section.needsHuman).length,
+    },
     'compliance: reviewed',
   );
 

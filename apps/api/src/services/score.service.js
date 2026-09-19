@@ -8,6 +8,8 @@
  * important" as an optional one in any real sense - the weights only shape the
  * score, never the verdict. The verdict is decided by blockers alone.
  */
+import { isRenewableAttestation } from '../lib/renewableAttestations.js';
+
 const OBLIGATION_WEIGHT = { eliminatoire: 3, obligatoire: 2, optionnelle: 1 };
 
 /** How much of a requirement each match status counts as covered. */
@@ -16,9 +18,10 @@ const STATUS_CREDIT = { met: 1, partial: 0.5, unmet: 0, unknown: 0 };
 /**
  * Unmet ELIMINATORY requirements. One blocker is a no-go regardless of score.
  *
- * `unknown` counts as a blocker on purpose: an eliminatory requirement we could
- * not assess is a risk to surface, not a gap to hide. The cahier des charges is
- * explicit that flagging beats masking.
+ * `unknown` and `partial` count as blockers on purpose: an eliminatory
+ * requirement we could not assess, or only half cover, is a risk to surface,
+ * not a gap to hide. The cahier des charges is explicit that flagging beats
+ * masking.
  *
  * @param {{ id: string, obligation: string, text: string, sourcePage: number, sourceArticle: string|null, sourceDocumentId: string|null }[]} requirements
  * @param {{ requirementId: string, status: string, reason: string }[]} matches
@@ -36,10 +39,14 @@ export function findBlockers(requirements, matches) {
     // checklist and a notation threshold is an outcome of the commission's
     // scoring - the company can fail neither at analysis time, and treating them
     // as capability gaps disqualifies every dossier on principle.
-    .filter((r) => r.obligation === 'eliminatoire' && r.nature === 'capacite')
+    .filter((r) => r.obligation === 'eliminatoire' && r.nature === 'capacite' && !isRenewableAttestation(r))
+    // `partial` blocks too. An eliminatory capability half-met is not met:
+    // "2 references sur les 3 exigees" is a rejection at the commission, and
+    // letting it through returned a confident GO on a dossier that cannot win.
+    // The human can still override; the agent does not get to round up.
     .filter((r) => {
       const status = byId.get(r.id)?.status ?? 'unknown';
-      return status === 'unmet' || status === 'unknown';
+      return status === 'unmet' || status === 'unknown' || status === 'partial';
     })
     .map((r) => {
       const match = byId.get(r.id);
@@ -65,9 +72,10 @@ export function findBlockers(requirements, matches) {
 /**
  * Orders blockers worst-first.
  *
- * `unmet` outranks `unknown`: a requirement the profile positively fails is a
- * harder fact than one we could not assess. Within a status, higher confidence
- * first, then document order.
+ * `unmet` outranks `partial`, which outranks `unknown`: a requirement the
+ * profile positively fails is a harder fact than one it half-covers, which is
+ * in turn harder than one we could not assess. Within a status, higher
+ * confidence first, then document order.
  *
  * This ordering is load-bearing, not cosmetic. The verdict calls blockers[0]
  * "la plus bloquante" and the UI lists them in order - an unsorted list made
@@ -79,7 +87,8 @@ export function findBlockers(requirements, matches) {
  * @returns {number}
  */
 function bySeverity(a, b) {
-  const rank = (blocker) => (blocker.status === 'unmet' ? 0 : 1);
+  const RANK = { unmet: 0, partial: 1, unknown: 2 };
+  const rank = (blocker) => RANK[blocker.status] ?? 2;
   if (rank(a) !== rank(b)) return rank(a) - rank(b);
 
   const confidence = (blocker) => (typeof blocker.confidence === 'number' ? blocker.confidence : 0);
@@ -98,7 +107,7 @@ function bySeverity(a, b) {
 export function coverageScore(allRequirements, matches) {
   // Procedural items are scored as part of the response checklist, not of the
   // company's fitness, so they do not drag the coverage score down.
-  const requirements = allRequirements.filter((r) => r.nature === 'capacite');
+  const requirements = allRequirements.filter((r) => r.nature === 'capacite' && !isRenewableAttestation(r));
   if (requirements.length === 0) return 0;
   const byId = new Map(matches.map((m) => [m.requirementId, m]));
 
@@ -154,30 +163,70 @@ export function projectRubric(rubric, coverage) {
 /**
  * The verdict. A single blocker forces no-go, whatever the score says.
  *
+ * A GO is an assertion. It is only ever returned from evidence that exists: no
+ * requirement analysed, or a stage that failed on the way here, is an ABSENCE of
+ * findings and must never read as eligibility. Those cases come back no-go with
+ * needsHuman, because "we could not tell" is the honest answer and the human is
+ * the one allowed to overturn it.
+ *
  * @param {number} score
  * @param {object[]} blockers
  * @param {{ requirementId: string, confidence: number }[]} [matches]
- * @returns {{ verdict: 'go'|'no-go', confidence: number, justification: string }}
+ * @param {{ node: string, message: string }[]} [stageErrors] failures accumulated by earlier nodes
+ * @returns {{ verdict: 'go'|'no-go', confidence: number, justification: string, needsHuman: boolean }}
  */
-export function verdict(score, blockers, matches = []) {
+export function verdict(score, blockers, matches = [], stageErrors = []) {
   const confidences = matches.map((m) => m.confidence).filter((c) => typeof c === 'number');
   const meanConfidence =
     confidences.length === 0
       ? 0.5
       : Math.round((confidences.reduce((a, b) => a + b, 0) / confidences.length) * 100) / 100;
 
+  if (matches.length === 0 && blockers.length === 0) {
+    return {
+      verdict: 'no-go',
+      confidence: 0,
+      needsHuman: true,
+      justification:
+        "Analyse non concluante : aucune exigence n'a pu etre evaluee. " +
+        (stageErrors.length > 0
+          ? `Etapes en echec : ${stageErrors.map((e) => e.node).join(', ')}. `
+          : '') +
+        "L'absence de constat n'est pas une preuve d'eligibilite : a reprendre par un humain.",
+    };
+  }
+
+  if (stageErrors.length > 0 && blockers.length === 0) {
+    return {
+      verdict: 'no-go',
+      confidence: 0,
+      needsHuman: true,
+      justification:
+        `Analyse incomplete : ${stageErrors.length} etape(s) en echec ` +
+        `(${[...new Set(stageErrors.map((e) => e.node))].join(', ')}). ` +
+        `Couverture calculee sur les seules exigences extraites : ${score}/100. ` +
+        "Verdict a trancher par un humain, le dossier n'a pas ete lu en entier.",
+    };
+  }
+
   if (blockers.length > 0) {
     // findBlockers sorts worst-first, so this really is the most blocking one.
     const first = blockers[0];
     const unassessed = first.status === 'unknown';
+    const halfMet = first.status === 'partial';
     return {
       verdict: 'no-go',
       confidence: meanConfidence,
+      needsHuman: stageErrors.length > 0 || blockers.some((b) => b.status === 'unknown' || b.status === 'partial'),
       justification:
         `${blockers.length} exigence(s) éliminatoire(s) non satisfaite(s). ` +
         `La plus bloquante : ${first.text ?? first.label}. ` +
         (unassessed
           ? "Elle n'a pas pu être évaluée faute d'information : à trancher par un humain avant d'abandonner. "
+          : '') +
+        (halfMet
+          ? 'Elle est partiellement couverte : le dossier ne la satisfait pas entièrement, ' +
+            "à trancher par un humain avant d'abandonner. "
           : '') +
         `Une seule suffit à écarter la candidature, quel que soit le reste du dossier.`,
     };
@@ -186,6 +235,7 @@ export function verdict(score, blockers, matches = []) {
   return {
     verdict: 'go',
     confidence: meanConfidence,
+    needsHuman: false,
     justification:
       `Aucune exigence éliminatoire non satisfaite. ` +
       `Couverture pondérée des exigences : ${score}/100.`,

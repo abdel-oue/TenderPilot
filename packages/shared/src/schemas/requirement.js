@@ -45,12 +45,13 @@ export const requirementSchema = z.object({
   sourceDocumentId: z.string(),
   sourcePage: z.number().int().positive(),
   sourceArticle: z.string().nullable(),
+  quoteVerified: z.boolean().optional(),
 });
 
 // What the Extractor is allowed to return: no ids yet (the DB assigns them), and
 // provenance is mandatory so the model cannot skip it.
 export const extractedRequirementSchema = requirementSchema
-  .omit({ id: true, tenderId: true, sourceDocumentId: true })
+  .omit({ id: true, tenderId: true, sourceDocumentId: true, quoteVerified: true })
   .extend({ quote: z.string().min(1).describe('verbatim sentence supporting this requirement') });
 
 export const extractedRequirementsSchema = z.object({

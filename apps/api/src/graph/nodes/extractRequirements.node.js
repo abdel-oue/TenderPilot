@@ -6,6 +6,7 @@
 // model having to guess it.
 
 import ExtractorAgent from '../../agents/extractor.agent.js';
+import { verifyQuote } from '../../lib/provenance.js';
 
 const extractor = new ExtractorAgent();
 import RequirementRepository from '../../repositories/requirement.repository.js';
@@ -26,6 +27,8 @@ export async function extractRequirementsNode(state) {
 
   const rows = [];
   const errors = [];
+  let auditedPages = 0;
+  let recoveredRequirements = 0;
 
   for (const [documentId, pages] of byDocument) {
     const readable = pages.filter((p) => p.extraction !== 'unread');
@@ -39,10 +42,34 @@ export async function extractRequirementsNode(state) {
     }
 
     try {
-      const { requirements } = await extractor.extractRequirements(
+      const { requirements: initial } = await extractor.extractRequirements(
         pages.sort((a, b) => a.page - b.page),
       );
+      const requirements = [];
+      for (let start = 0; start < readable.length; start += 8) {
+        const batch = readable.slice(start, start + 8);
+        const pageNumbers = new Set(batch.map((p) => p.page));
+        const proposed = initial.filter((r) => pageNumbers.has(r.sourcePage));
+        const audited = await extractor.auditRequirements(batch, proposed);
+        const reviewed = new Set(audited.reviewedPages);
+        if (reviewed.size !== pageNumbers.size || [...pageNumbers].some((p) => !reviewed.has(p))) {
+          throw new Error(`document ${documentId}: audit incomplet des pages ${[...pageNumbers].join(', ')}`);
+        }
+        if (audited.requirements.some((r) => !pageNumbers.has(r.sourcePage))) {
+          throw new Error(`document ${documentId}: audit cite une page hors du lot`);
+        }
+        auditedPages += reviewed.size;
+        recoveredRequirements += audited.requirements.filter((r) => !proposed.some((p) => p.sourcePage === r.sourcePage && p.quote === r.quote)).length;
+        requirements.push(...audited.requirements);
+      }
+      if (requirements.length === 0) {
+        errors.push({ node: 'extractRequirements', message: `document ${documentId}: aucune exigence identifiee, verification humaine requise` });
+      }
       for (const requirement of requirements) {
+        const quoteVerified = verifyQuote(requirement, pages);
+        if (!quoteVerified) {
+          errors.push({ node: 'extractRequirements', message: `document ${documentId}, p. ${requirement.sourcePage}: citation introuvable ou page illisible : ${requirement.quote}` });
+        }
         rows.push({
           tenderId: state.tenderId,
           text: requirement.text,
@@ -50,6 +77,7 @@ export async function extractRequirementsNode(state) {
           obligation: requirement.obligation,
           nature: requirement.nature,
           quote: requirement.quote,
+          quoteVerified,
           sourceDocumentId: documentId,
           sourcePage: requirement.sourcePage,
           sourceArticle: requirement.sourceArticle,
@@ -75,5 +103,5 @@ export async function extractRequirementsNode(state) {
     'extractRequirements: done',
   );
 
-  return { requirements: saved, errors };
+  return { requirements: saved, errors, extractionAudit: { auditedPages, recoveredRequirements } };
 }

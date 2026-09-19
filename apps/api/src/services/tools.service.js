@@ -35,6 +35,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { interrupt, isGraphBubbleUp } from '@langchain/langgraph';
 import { logger } from '../lib/logger.js';
 import { publishRunEvent } from '../lib/runEvents.js';
+import { observeTool } from '../lib/activity.js';
 import { describeToolCall } from '../lib/narration.js';
 import {
   ASK_HUMAN_BUDGET_SPENT,
@@ -266,37 +267,16 @@ export default class ToolsService {
    * @returns {Promise<object>}
    */
   async execute(name, args, context = {}) {
-    const startedAt = Date.now();
-    // `raison` is for the reader, never for the tool, so it is stripped from the
-    // arguments and no implementation has to know the narration field exists.
-    // It rides along on the context for the one tool that shows it to a human
-    // directly rather than through lib/narration.js.
     const { raison, ...toolArgs } = args ?? {};
     try {
-      const result = await this.dispatch(name, toolArgs, { ...context, raison: raison ?? null });
-      const ms = Date.now() - startedAt;
-      logger.info({ tool: name, ms }, 'tool: ok');
-      // The trace row for this node is not written until the node ENDS, which on
-      // a node that calls six tools is twenty seconds of silence. This fires the
-      // moment one tool returns, so the reader watches the agent work instead of
-      // watching a spinner and then a wall of text.
-      await publishRunEvent(context.runId, {
-        type: 'tool',
-        node: context.node ?? 'inconnu',
+      return await observeTool(
         name,
-        raison: raison ?? null,
-        // Same narrator the node-level trace uses, so the live row and the row
-        // that survives a refresh say exactly the same thing.
-        outcome: describeToolCall(name, args ?? {}, result ?? {}),
-        ms,
-        at: new Date().toISOString(),
-      });
-      return result;
+        raison,
+        () => this.dispatch(name, toolArgs, { ...context, raison: raison ?? null }),
+        (result) => describeToolCall(name, args ?? {}, result ?? {}),
+        context,
+      );
     } catch (error) {
-      // An interrupt is not a failure: ask_human raised it and LangGraph has to
-      // see it to park the run on its checkpoint. Swallowing it here would turn
-      // a pause into a tool that silently returned an error, and the agent would
-      // answer the dossier alone having been told nothing.
       if (isGraphBubbleUp(error)) throw error;
       logger.warn({ tool: name, err: error.message }, 'tool: failed');
       return { error: error.message };
@@ -332,7 +312,7 @@ export default class ToolsService {
 
     const answered = trace.find((entry) => entry.status === 'human' && entry.askKey === askKey);
     if (answered) {
-      return { reponse: answered.choice, instruction: answered.instruction ?? null };
+      return { reponse: answered.choice, instruction: answered.instruction ?? null, verdictOverride: answered.verdictOverride ?? null, dismissedBlockers: answered.dismissedBlockers ?? [] };
     }
 
     if (trace.filter((entry) => entry.status === 'human').length >= MAX_HUMAN_ASKS) {
@@ -359,7 +339,7 @@ export default class ToolsService {
     logger.info({ runId: context.runId, node: pending.node }, 'tool: asking the human');
 
     const answer = interrupt(pending);
-    return { reponse: answer?.choice ?? null, instruction: answer?.instruction ?? null };
+    return { reponse: answer?.choice ?? null, instruction: answer?.instruction ?? null, verdictOverride: answer?.verdictOverride ?? null, dismissedBlockers: answer?.dismissedBlockers ?? [] };
   }
 
   /**

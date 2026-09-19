@@ -12,10 +12,10 @@
 export const ASK_HUMAN_DESCRIPTION =
   'Pose UNE question au dirigeant et attends sa reponse. Le declencheur est un ' +
   'ARBITRAGE, pas une information qui te manque : tu as le fait, la regle ne le ' +
-  'tranche pas, et la reponse decide d un no-go. Trois familles :\n' +
-  '1. Validite dans le temps : une attestation est expiree a la date limite - ' +
-  'no-go, ou sera-t-elle renouvelee avant le depot ? La date est lue, c est la ' +
-  'pratique commerciale que tu ignores.\n' +
+  'tranche pas, et la reponse decide d un no-go. ' +
+  'Une attestation fiscale ou CNSS expiree est seulement un point de vigilance : ' +
+  'signale les dates connues et le renouvellement avant depot, sans poser de question ' +
+  'et sans No-Go. Deux familles d arbitrage :\n' +
   '2. Seuil manque de peu : l avis exige 13 ans d experience, le meilleur CV en ' +
   'a 12 - exigence de capacite (eliminatoire) ou de notation (quelques points) ? ' +
   'Le chiffre est sur, c est la nature de l exigence qui ne l est pas.\n' +
@@ -33,8 +33,8 @@ export const ASK_HUMAN_QUESTION =
   'Elle doit porter l ENJEU : le fait etabli, puis ce qui se passe selon la ' +
   'reponse. Sans l enjeu, il repond a une question de forme sans savoir qu il ' +
   'decide d un abandon. Sans jargon, sans nom d outil, repondable sans relire ' +
-  'le dossier. Ex : "L attestation fiscale expire le 12/06, avant la date limite ' +
-  'du 08/07. Si je la considere expiree, le dossier passe en no-go."';
+  'le dossier. Ex : "La certification ISO annoncee ne figure pas dans les pieces. ' +
+  'Disposez-vous du justificatif pour confirmer cette capacite exigée ?"';
 
 export const ASK_HUMAN_OPTIONS =
   'Les reponses possibles, de 2 a 6. Ce sont les ISSUES de l arbitrage, pas des ' +

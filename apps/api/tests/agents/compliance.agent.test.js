@@ -21,6 +21,7 @@ describe('ComplianceAgent.checkCitations', () => {
       ComplianceAgent.checkCitations({
         content: 'Mission similaire (REF-07).',
         citations: ['REF-07'],
+        toolCalls: [{ tool: 'get_company_facts', result: { references: [{ id: 'REF-07', client: 'ONCF' }] } }],
       }),
     ).toBeNull();
   });
@@ -36,7 +37,7 @@ describe('ComplianceAgent.checkCitations', () => {
 
   it('is case insensitive, since the model does not always shout', () => {
     expect(
-      ComplianceAgent.checkCitations({ content: 'voir ref-07', citations: ['REF-07'] }),
+      ComplianceAgent.checkCitations({ content: 'voir ref-07', citations: ['REF-07'], toolCalls: [{ tool: 'search_documents', args: { corpus: 'entreprise' }, result: { extracts: [{ excerpt: 'Mission ref-07' }] } }] }),
     ).toBeNull();
   });
 

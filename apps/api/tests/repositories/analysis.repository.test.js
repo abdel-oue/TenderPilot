@@ -108,6 +108,11 @@ describe('AnalysisRepository.upsertSection (EX-06)', () => {
 });
 
 describe('AnalysisRepository.findHumanEditsForTender', () => {
+  it('uses only the newest correction for each section', async () => {
+    const latest = { sectionKey: 'team', content: 'Latest', runId: 'new' };
+    const repository = new AnalysisRepository(fakeDb([latest, { sectionKey: 'team', content: 'Obsolete', runId: 'old' }]));
+    expect(await repository.findHumanEditsForTender('tender-1')).toEqual([latest]);
+  });
   it('reads corrections across every run of the tender, not just the current one', async () => {
     // Each start() mints a new runId, so a lookup scoped to one run cannot see
     // the correction a human made during the previous analysis - which is what

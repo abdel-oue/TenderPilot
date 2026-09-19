@@ -19,6 +19,7 @@ export default async function analysisRoutes(app) {
   app.get('/analyses', (request, reply) => controller.list(request, reply));
   app.get('/analyses/:runId', (request, reply) => controller.detail(request, reply));
   app.post('/analyses/:runId/answer', (request, reply) => controller.answer(request, reply));
+  app.post('/analyses/:runId/decision', (request, reply) => controller.reviewDecision(request, reply));
   app.patch('/analyses/:runId/sections', (request, reply) => controller.saveSection(request, reply));
   app.get('/analyses/:runId/export.docx', (request, reply) => controller.exportDocx(request, reply));
 }

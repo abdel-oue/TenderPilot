@@ -7,6 +7,7 @@ import AnalysisService from '../services/analysis.service.js';
 import ExportService from '../services/export.service.js';
 import {
   parseHumanAnswerBody,
+  parseDecisionBody,
   parseRunIdParam,
   parseSectionEditBody,
   parseTenderIdParam,
@@ -71,7 +72,9 @@ export default class AnalysisController {
     // opened: a runId is not a capability.
     const envelope = await this.analyses.getByTender(id, request.user.id);
 
+    reply.hijack();
     reply.raw.writeHead(200, {
+      ...reply.getHeaders(),
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',
@@ -82,7 +85,7 @@ export default class AnalysisController {
 
     /** @param {object} event @returns {void} */
     const send = (event) => {
-      if (!reply.raw.writableEnded) reply.raw.write('data: ' + JSON.stringify(event) + SSE_END);
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.write('data: ' + JSON.stringify(event) + SSE_END);
     };
 
     // The current status first, so a browser that connects late is not stuck
@@ -90,17 +93,26 @@ export default class AnalysisController {
     send({ type: 'status', status: envelope.status });
     if (envelope.pendingQuestion) send({ type: 'ask', question: envelope.pendingQuestion });
 
-    const unsubscribe = await subscribeRunEvents(envelope.runId, send);
+    let unsubscribe;
+    let closed = false;
     // A comment line keeps proxies and load balancers from reaping an idle
     // connection during a long node.
     const heartbeat = setInterval(() => {
       if (!reply.raw.writableEnded) reply.raw.write(': keep-alive' + SSE_END);
     }, 15_000);
 
-    request.raw.on('close', () => {
+    reply.raw.on('close', () => {
+      closed = true;
       clearInterval(heartbeat);
-      void unsubscribe();
+      void unsubscribe?.();
     });
+    try {
+      unsubscribe = await subscribeRunEvents(envelope.runId, send);
+      if (closed) await unsubscribe();
+    } catch {
+      clearInterval(heartbeat);
+      reply.raw.end();
+    }
   }
 
   /**
@@ -135,6 +147,12 @@ export default class AnalysisController {
     const { runId } = parseRunIdParam(request.params);
     const body = parseHumanAnswerBody(request.body);
     return reply.code(202).send(await this.analyses.answer(runId, body, request.user.id));
+  }
+
+  /** @param {object} request @param {object} reply @returns {Promise<object>} */
+  async reviewDecision(request, reply) {
+    const { runId } = parseRunIdParam(request.params);
+    return reply.code(202).send(await this.analyses.reviewDecision(runId, parseDecisionBody(request.body), request.user.id));
   }
 
   /**

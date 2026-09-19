@@ -42,6 +42,15 @@ export const analysisResults = pgTable('analysis_results', {
   rubricBreakdown: jsonb('rubric_breakdown').notNull().default([]),
   // EX-07: pages that could not be read, surfaced rather than silently dropped.
   unreadPages: jsonb('unread_pages').notNull().default([]),
+  // Every node failure the run accumulated. Without this the graph could lose
+  // ingestion and extraction, finish, and store a clean-looking verdict: the
+  // result row is the only thing the UI and the export read, so a failure that
+  // is not here did not happen as far as the user is concerned.
+  stageErrors: jsonb('stage_errors').notNull().default([]),
+  // The verdict is not actionable on its own. true = the analysis could not
+  // settle eligibility (nothing evaluated, a stage failed, or a blocker is only
+  // partially assessed) and a human has to rule before this is acted on.
+  needsHuman: boolean('needs_human').notNull().default(false),
   generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -59,6 +68,13 @@ export const sectionEdits = pgTable(
     content: text('content').notNull(),
     // false = still the agent's draft, true = a human rewrote it.
     editedByHuman: boolean('edited_by_human').notNull().default(false),
+    validatedByHuman: boolean('validated_by_human').notNull().default(false),
+    // Compliance's unresolved objections, and the flag the review UI and the
+    // DOCX export key off. These lived only in graph memory before, so a
+    // section that exhausted its redrafts - or whose review never ran - was
+    // persisted looking exactly like one that passed.
+    complianceWarnings: jsonb('compliance_warnings').notNull().default([]),
+    needsHuman: boolean('needs_human').notNull().default(false),
     editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('section_edits_run_idx').on(table.runId, table.sectionKey)],

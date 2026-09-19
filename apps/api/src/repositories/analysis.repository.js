@@ -98,12 +98,17 @@ export default class AnalysisRepository {
    * @returns {Promise<void>}
    */
   async appendTrace(runId, entry) {
-    const run = await this.findRunById(runId);
-    if (!run) return;
     await this.db
       .update(analysisRuns)
-      .set({ nodeTrace: [...(run.nodeTrace ?? []), entry] })
+      .set({ nodeTrace: sql`coalesce(${analysisRuns.nodeTrace}, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb` })
       .where(eq(analysisRuns.id, runId));
+  }
+
+  async updateTrace(runId, entry) {
+    await this.db.update(analysisRuns).set({
+      nodeTrace: sql`(select jsonb_agg(case when item->>'id' = ${entry.id} then ${JSON.stringify(entry)}::jsonb else item end order by position)
+        from jsonb_array_elements(${analysisRuns.nodeTrace}) with ordinality as trace(item, position))`,
+    }).where(eq(analysisRuns.id, runId));
   }
 
   /**
@@ -176,7 +181,7 @@ export default class AnalysisRepository {
    * survived exactly until the graph touched the section again. The human always
    * wins; only another human edit replaces a human edit.
    *
-   * @param {{ runId: string, sectionKey: string, title: string, content: string, editedByHuman: boolean }} values
+   * @param {{ runId: string, sectionKey: string, title: string, content: string, editedByHuman: boolean, complianceWarnings?: object[], needsHuman?: boolean }} values
    * @returns {Promise<object>}
    */
   async upsertSection(values) {
@@ -197,6 +202,9 @@ export default class AnalysisRepository {
         title: values.title,
         content: values.content,
         editedByHuman: values.editedByHuman,
+        validatedByHuman: values.validatedByHuman ?? false,
+        complianceWarnings: values.complianceWarnings ?? [],
+        needsHuman: values.needsHuman ?? false,
         editedAt: new Date(),
       })
       .where(eq(sectionEdits.id, existing.id))
@@ -217,17 +225,22 @@ export default class AnalysisRepository {
    * @returns {Promise<object[]>}
    */
   async findHumanEditsForTender(tenderId) {
-    return this.db
+    const rows = await this.db
       .select({
         sectionKey: sectionEdits.sectionKey,
         title: sectionEdits.title,
         content: sectionEdits.content,
         editedAt: sectionEdits.editedAt,
         runId: sectionEdits.runId,
+        validatedByHuman: sectionEdits.validatedByHuman,
+        complianceWarnings: sectionEdits.complianceWarnings,
       })
       .from(sectionEdits)
       .innerJoin(analysisRuns, eq(analysisRuns.id, sectionEdits.runId))
       .where(and(eq(analysisRuns.tenderId, tenderId), eq(sectionEdits.editedByHuman, true)))
       .orderBy(desc(sectionEdits.editedAt));
+    const newest = new Map();
+    for (const row of rows) if (!newest.has(row.sectionKey)) newest.set(row.sectionKey, row);
+    return [...newest.values()];
   }
 }

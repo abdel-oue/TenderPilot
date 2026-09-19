@@ -91,6 +91,9 @@ export default class ExportService {
         ],
       }),
       new Paragraph({ text: result?.justification ?? '' }),
+      ...(result?.needsHuman ? [new Paragraph({ text: 'VERIFICATION HUMAINE REQUISE — dossier incomplet ou non valide.', heading: HeadingLevel.HEADING_2 })] : []),
+      ...(result?.stageErrors ?? []).map((error) => new Paragraph({ text: error.message, bullet: { level: 0 } })),
+      ...(result?.unreadPages ?? []).map((page) => new Paragraph({ text: `Page non lue : document ${page.documentId}, p. ${page.page}.`, bullet: { level: 0 } })),
     ];
 
     const blockers = result?.blockers ?? [];
@@ -133,6 +136,9 @@ export default class ExportService {
 
     return ordered.flatMap((section) => [
       new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_1 }),
+      ...(section.needsHuman ? [new Paragraph({ text: '[A COMPLETER OU VALIDER PAR L\'HUMAIN]' })] : []),
+      ...(section.complianceWarnings ?? []).map((warning) => new Paragraph({ text: warning, bullet: { level: 0 } })),
+      ...(section.validatedByHuman ? [new Paragraph({ text: 'Section validee par un humain.' })] : []),
       ...(section.editedByHuman
         ? [
             new Paragraph({

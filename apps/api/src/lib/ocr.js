@@ -139,7 +139,12 @@ export async function ocrPages(buffer, pageNumbers, lang = env.OCR_LANG) {
   const pages = [];
 
   for (const { first, last } of ranges) {
-    pages.push(...(await ocrPageRange(buffer, first, last, lang)));
+    try {
+      pages.push(...(await ocrPageRange(buffer, first, last, lang)));
+    } catch (error) {
+      logger.warn({ first, last, err: error.message }, 'ocr: range failed, pages left unread');
+      for (let page = first; page <= last; page += 1) pages.push({ page, text: '' });
+    }
   }
 
   return pages.sort((a, b) => a.page - b.page);

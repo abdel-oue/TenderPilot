@@ -630,7 +630,7 @@ describe('ask_human', () => {
       { ...CONTEXT, node: 'matchProfile' },
     );
 
-    expect(result).toEqual({ reponse: 'oui', instruction: 'nous l avons depuis 2023' });
+    expect(result).toEqual({ reponse: 'oui', instruction: 'nous l avons depuis 2023', verdictOverride: null, dismissedBlockers: [] });
   });
 
   it('stops asking once the budget is spent', async () => {

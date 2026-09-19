@@ -1,0 +1,1 @@
+ALTER TABLE "section_edits" ADD COLUMN "validated_by_human" boolean DEFAULT false NOT NULL;

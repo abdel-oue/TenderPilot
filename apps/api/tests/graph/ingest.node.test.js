@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nodeActivity } from '../../src/lib/activity.js';
 
 /**
  * The per-page routing, with unpdf and the OCR binaries stubbed out. The real
@@ -194,5 +195,38 @@ describe('documentExtractionPath', () => {
 
   it('reports a document nothing could read as ocr, because OCR was tried', () => {
     expect(documentExtractionPath([{ extraction: 'unread' }])).toBe('ocr');
+  });
+});
+
+describe('ingestion activity and timing', () => {
+  it.each(['text', 'ocr', 'mixed'])('reports actual tools and separate durations for %s', async (mode) => {
+    let clock = 1000;
+    const timer = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const events = [];
+    mocks.extractPages.mockImplementation(async () => {
+      clock += 25;
+      return [{ page: 1, text: mode === 'ocr' ? '' : READABLE }, ...(mode === 'mixed' ? [{ page: 2, text: '' }] : [])];
+    });
+    mocks.ocrPages.mockImplementation(async (_buffer, pages) => {
+      clock += 750;
+      return pages.map((page) => ({ page, text: READABLE }));
+    });
+    try {
+      await nodeActivity.run({ node: 'ingest', record: async (tool) => events.push({ ...tool }) }, () => ingestDocument(DOCUMENT));
+      const finished = events.filter((event) => event.status === 'ok');
+      expect(finished.map((event) => event.name)).toEqual(mode === 'text' ? ['document_cache', 'extract_text'] : ['document_cache', 'extract_text', 'ocr']);
+      expect(finished.find((event) => event.name === 'extract_text').ms).toBe(25);
+      if (mode !== 'text') expect(finished.find((event) => event.name === 'ocr').ms).toBe(750);
+      expect(events.filter((event) => event.status === 'running')).toHaveLength(finished.length);
+    } finally { timer.mockRestore(); }
+  });
+
+  it('labels reused OCR pages as a cache read, not a new OCR operation', async () => {
+    mocks.getCachedPages.mockResolvedValue({ documentId: 'doc-1', extractionPath: 'ocr', pages: [{ page: 1, text: READABLE, extraction: 'ocr' }] });
+    const events = [];
+    await nodeActivity.run({ node: 'ingest', record: async (tool) => events.push({ ...tool }) }, () => ingestDocument(DOCUMENT));
+    expect(events.map((event) => event.name)).toEqual(['document_cache', 'document_cache']);
+    expect(mocks.extractPages).not.toHaveBeenCalled();
+    expect(mocks.ocrPages).not.toHaveBeenCalled();
   });
 });

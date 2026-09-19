@@ -10,6 +10,7 @@ import RequirementRepository from '../../repositories/requirement.repository.js'
 
 const requirementsRepo = new RequirementRepository();
 import { logger } from '../../lib/logger.js';
+import { verifyQuote } from '../../lib/provenance.js';
 
 /**
  * @param {import('@tenderpilot/shared').GraphState} state
@@ -25,7 +26,16 @@ export async function parseRubric(state) {
   }
 
   try {
-    const { criteria } = await extractor.extractRubric(readable.sort((a, b) => a.page - b.page));
+    const criteria = [];
+    const documents = new Set(readable.map((page) => page.documentId));
+    for (const documentId of documents) {
+      const pages = readable.filter((page) => page.documentId === documentId).sort((a, b) => a.page - b.page);
+      const extracted = await extractor.extractRubric(pages);
+      for (const criterion of extracted.criteria) {
+        if (!verifyQuote(criterion, pages)) throw new Error('Grille de notation sans citation verifiable.');
+        criteria.push(criterion);
+      }
+    }
 
     await requirementsRepo.deleteRubricByTender(state.tenderId);
     await requirementsRepo.insertRubric(

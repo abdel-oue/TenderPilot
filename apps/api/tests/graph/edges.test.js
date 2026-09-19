@@ -61,6 +61,9 @@ describe('shouldRedraft (the compliance refusal edge)', () => {
 });
 
 describe('summarize (what the trace panel and the video show)', () => {
+  it('makes a fast cached ingestion explicit even if pages originally came from OCR', () => {
+    expect(summarize('ingest', { documents: [{ extractionPath: 'cached' }], pages: [{ extraction: 'ocr' }] })).toContain('1 document(s) repris du cache');
+  });
   it('reports OCR and unreadable pages, which is EX-07 made visible', () => {
     const summary = summarize('ingest', {
       pages: [

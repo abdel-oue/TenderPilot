@@ -1,4 +1,4 @@
-import { index, integer, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { documents } from './document.table.js';
 import { tenders } from './tender.table.js';
 
@@ -17,6 +17,11 @@ export const requirements = pgTable(
     // capacite | procedure - only a capacite can block. See packages/shared.
     nature: text('nature').notNull().default('capacite'),
     quote: text('quote'),
+    // Whether `quote` was actually found on `source_page` of the source
+    // document. The page number and the verbatim are the model's claim; a
+    // clickable citation that nobody checked is a claim wearing a link. false
+    // means the extractor cited a page the sentence is not on.
+    quoteVerified: boolean('quote_verified').notNull().default(false),
     sourceDocumentId: uuid('source_document_id').references(() => documents.id, {
       onDelete: 'set null',
     }),

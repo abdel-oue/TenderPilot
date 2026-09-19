@@ -12,6 +12,7 @@
 // non lues, et n'invente aucune exigence" - and silently dropping it is the
 // failure mode the jury tests for.
 
+import { observeTool } from '../../lib/activity.js';
 import { readFile } from 'node:fs/promises';
 import { getCachedPages, hashFile } from '../../lib/cache.js';
 import { logger } from '../../lib/logger.js';
@@ -42,7 +43,12 @@ export function documentExtractionPath(pages) {
  * @returns {Promise<{ page: number, text: string, extraction: string }[]>}
  */
 export async function readPages(buffer, filePath) {
-  const extracted = await extractPages(buffer);
+  const extracted = await observeTool(
+    'extract_text',
+    'Lecture de la couche texte du PDF',
+    () => extractPages(buffer),
+    (pages) => `${pages.filter(isReadablePage).length}/${pages.length} pages lisibles dans la couche texte`,
+  );
   const labelled = extracted.map((p) => ({
     page: p.page,
     text: p.text,
@@ -71,7 +77,13 @@ export async function readPages(buffer, filePath) {
   }
 
   logger.info({ filePath, pages: needOcr.length }, 'ingest: routing pages to OCR');
-  const ocred = new Map((await ocrPages(buffer, needOcr)).map((p) => [p.page, p.text]));
+  const ocredPages = await observeTool(
+    'ocr',
+    `Reconnaissance de ${needOcr.length} page(s) sans texte lisible`,
+    () => ocrPages(buffer, needOcr),
+    (pages) => `${pages.filter(isReadablePage).length}/${needOcr.length} pages lisibles après OCR`,
+  );
+  const ocred = new Map(ocredPages.map((p) => [p.page, p.text]));
 
   return labelled.map((p) => {
     if (p.extraction !== 'unread') return p;
@@ -105,9 +117,13 @@ async function repairUnreadPages(cached, buffer, filePath) {
   }
 
   logger.info({ filePath, pages: unread.length }, 'ingest: repairing unread pages with OCR');
-  const ocred = new Map(
-    (await ocrPages(buffer, unread.map((p) => p.page))).map((p) => [p.page, p.text]),
+  const ocredPages = await observeTool(
+    'ocr',
+    `Nouvelle lecture de ${unread.length} page(s) illisible(s)`,
+    () => ocrPages(buffer, unread.map((p) => p.page)),
+    (pages) => `${pages.filter(isReadablePage).length}/${unread.length} pages récupérées par OCR`,
   );
+  const ocred = new Map(ocredPages.map((p) => [p.page, p.text]));
 
   const repaired = cached.pages.map((p) => {
     if (p.extraction !== 'unread') return p;
@@ -141,7 +157,16 @@ export async function ingestDocument(document) {
   const buffer = await readFile(document.filePath);
   const hash = hashFile(buffer);
 
-  const cached = await getCachedPages(hash, document.ownerId);
+  const describeCacheHit = (cache) =>
+    cache
+      ? `${cache.pages.length} pages en cache ; aucune nouvelle extraction pour les pages lisibles`
+      : 'Document non présent en cache';
+  const cached = await observeTool(
+    'document_cache',
+    'Recherche de pages déjà extraites',
+    () => getCachedPages(hash, document.ownerId),
+    describeCacheHit,
+  );
   if (cached) {
     logger.info({ documentId: cached.documentId }, 'ingest: cache hit');
     const pages = await repairUnreadPages(cached, buffer, document.filePath);
@@ -200,6 +225,7 @@ export async function ingest(state) {
         id: result.documentId,
         kind: document.kind,
         pageCount: result.pages.length,
+        extractionPath: result.extractionPath,
       });
       for (const page of result.pages) {
         pages.push({ documentId: result.documentId, ...page });

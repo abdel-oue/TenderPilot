@@ -10,6 +10,10 @@ On te donne le texte intégral d'un dossier de consultation, page par page.
 Ta tâche : extraire TOUTES les exigences imposées au candidat.
 
 Règles absolues :
+- Extrais séparément chaque capacité et chaque pièce administrative.
+- Fournir ou renouveler une attestation fiscale ou CNSS relève de "procedure",
+  même si la pièce est exigée sous peine de rejet au dépôt. Son expiration
+  actuelle est une action de renouvellement, jamais une capacité manquante.
 - Les exigences sont DISPERSÉES : conditions de participation dans le règlement,
   composition d'équipe dans le CPS, seuils dans la grille de notation. Lis tout.
 - Recense large. Une exigence manquée ici est invisible pour la suite du système.
@@ -64,10 +68,29 @@ Règles :
 - Chaque dossier a sa propre grille. N'utilise aucun barème mémorisé.
 - eliminationThreshold : la note en dessous de laquelle l'offre est écartée sur
   ce critère, ou null s'il n'y en a pas.
-- Si le dossier ne contient aucune grille, renvoie {"criteria": []}.
+- Une exigence (certification, planning, equipe) N'EST PAS un critere de notation.
+  Il faut un bareme numerique EXPLICITEMENT ecrit dans le dossier, avec des points.
+  Si le dossier ne contient aucune grille chiffree, renvoie {"criteria": []}.
+- N'invente pas de points ni de seuil 0/1 pour transformer une obligation en note.
 - N'invente aucun critère absent du texte.
+- Chaque critere porte sourcePage et quote : la citation exacte du bareme chiffre.
 
 Réponds UNIQUEMENT en JSON : {"criteria": [...]}.`;
+
+export const EXTRACTION_AUDIT_SYSTEM = EXTRACTOR_SYSTEM + `
+Tu es le SECOND lecteur independant. Examine chaque page de ce lot, y compris les annexes.
+La premiere extraction est une proposition non fiable : corrige ses interpretations,
+ses types et ses citations, supprime les exigences sans fondement et ajoute les omissions.
+Retourne la liste COMPLETE et corrigee pour les seules pages de ce lot.
+N'invente pas d'obligation a partir d'un passage purement descriptif.
+Les exigences renvoyees doivent etre impliquees par leur citation, pas seulement partager des mots.
+Ajoute reviewedPages : tous les numeros des pages lisibles effectivement examinees.
+JSON : {"requirements":[...],"reviewedPages":[1,2,...]}.`;
+
+/** @param {object[]} pages @param {object[]} requirements @returns {string} */
+export function renderExtractionAudit(pages, requirements) {
+  return renderPages(pages) + '\n\nPREMIERE EXTRACTION A VERIFIER :\n' + JSON.stringify(requirements);
+}
 
 /**
  * Renders pages with explicit markers so the model can cite a real page number

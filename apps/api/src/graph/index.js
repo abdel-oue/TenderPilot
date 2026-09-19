@@ -27,6 +27,8 @@ import { logger } from '../lib/logger.js';
 import { isGraphBubbleUp } from '@langchain/langgraph';
 import { describeToolCall } from '../lib/narration.js';
 import { publishRunEvent } from '../lib/runEvents.js';
+import { randomUUID } from 'node:crypto';
+import { nodeActivity } from '../lib/activity.js';
 import AnalysisRepository from '../repositories/analysis.repository.js';
 import { ingest } from './nodes/ingest.node.js';
 import { extractRequirementsNode } from './nodes/extractRequirements.node.js';
@@ -38,7 +40,7 @@ import { decide } from './nodes/decide.node.js';
 import { draft } from './nodes/draft.node.js';
 import { reviewSections, shouldRedraft } from './nodes/compliance.node.js';
 
-export const GRAPH_VERSION = 'v1';
+export const GRAPH_VERSION = 'v4';
 
 /**
  * State channels. Each key says how two updates are merged; nodes return partial
@@ -57,6 +59,8 @@ const channels = {
   documents: { ...replace, default: () => [] },
   pages: { ...replace, default: () => [] },
   requirements: { ...replace, default: () => [] },
+  extractionAudit: { ...replace, default: () => null },
+  humanDecisions: { ...replace, default: () => [] },
   rubric: { ...replace, default: () => [] },
   matches: { ...replace, default: () => [] },
   score: { ...replace, default: () => null },
@@ -66,6 +70,10 @@ const channels = {
   verdict: { ...replace, default: () => null },
   confidence: { ...replace, default: () => null },
   justification: { ...replace, default: () => null },
+  // Set by decide() when eligibility could not be settled - nothing evaluated,
+  // a stage in error, or a blocker only partially assessed. It travels with the
+  // verdict because it qualifies it.
+  needsHuman: { ...replace, default: () => false },
   blockers: { ...replace, default: () => [] },
   sections: { ...replace, default: () => [] },
   rejected: { ...replace, default: () => [] },
@@ -97,36 +105,66 @@ const channels = {
 export function traced(name, fn, analyses) {
   return async (state) => {
     const startedAt = Date.now();
+    const startedAtIso = new Date(startedAt).toISOString();
+    const liveEntry = {
+      id: randomUUID(),
+      node: name,
+      at: startedAtIso,
+      startedAt: startedAtIso,
+      status: 'running',
+      summary: '',
+      tools: [],
+    };
+    if (state.runId) await analyses.appendTrace(state.runId, liveEntry).catch(() => {});
+    await publishRunEvent(state.runId, { type: 'node', ...liveEntry });
+    let pendingWrite = Promise.resolve();
+    function recordTool(tool) {
+      const index = liveEntry.tools.findIndex((item) => item.id === tool.id);
+      if (index < 0) liveEntry.tools.push({ ...tool });
+      else liveEntry.tools[index] = { ...tool };
+
+      const snapshot = structuredClone(liveEntry);
+      pendingWrite = pendingWrite
+        .then(() => state.runId && analyses.updateTrace(state.runId, snapshot))
+        .catch(() => {});
+      return pendingWrite;
+    }
+    const activity = { runId: state.runId, node: name, record: recordTool };
     try {
-      const patch = await fn(state);
+      const patch = await nodeActivity.run(activity, () => fn(state));
       const entry = {
+        ...liveEntry,
         node: name,
         at: new Date().toISOString(),
-        summary: summarize(name, patch),
-        status: 'ok',
+        summary: summarize(name, patch) + ((patch.errors ?? []).length ? ' — ' + patch.errors.map((e) => e.message).join('; ') : ''),
+        status: (patch.errors ?? []).length ? 'error' : 'ok',
         ms: Date.now() - startedAt,
-        tools: narrate(patch.toolCalls),
+        tools: liveEntry.tools.length ? liveEntry.tools : narrate(patch.toolCalls),
       };
-      if (state.runId) await analyses.appendTrace(state.runId, entry).catch(() => {});
-      // Without `tools`: each one was already published on its own as it
-      // returned, which is the whole point of the tool event.
-      const { tools: _tools, ...nodeEvent } = entry;
-      await publishRunEvent(state.runId, { type: 'node', ...nodeEvent });
+      await pendingWrite;
+      if (state.runId) await analyses.updateTrace(state.runId, entry).catch(() => {});
+      // Send the complete row too, covering a missed individual tool event.
+      await publishRunEvent(state.runId, { type: 'node', ...entry });
       return { ...patch, nodeTrace: [entry] };
     } catch (error) {
       // An interrupt is not a node failure. ask_human raised it to park the run
       // on its checkpoint, and this catch-all is the last thing between it and
       // LangGraph: recorded as an error here, the pause would become a failed
       // node and the graph would carry on and answer the dossier alone.
-      if (isGraphBubbleUp(error)) throw error;
+      if (isGraphBubbleUp(error)) {
+        if (state.runId) await analyses.updateTrace(state.runId, { ...liveEntry, status: 'paused', ms: Date.now() - startedAt, summary: 'En attente de votre réponse' }).catch(() => {});
+        throw error;
+      }
       const entry = {
+        ...liveEntry,
         node: name,
         at: new Date().toISOString(),
         summary: error.message,
         status: 'error',
         ms: Date.now() - startedAt,
       };
-      if (state.runId) await analyses.appendTrace(state.runId, entry).catch(() => {});
+      await pendingWrite;
+      if (state.runId) await analyses.updateTrace(state.runId, entry).catch(() => {});
       await publishRunEvent(state.runId, { type: 'node', ...entry });
       logger.error({ node: name, err: error.message }, 'graph: node failed');
       // One node failing records itself and lets the graph continue: a dossier
@@ -168,12 +206,15 @@ export function summarize(name, patch = {}) {
     case 'ingest': {
       const unread = (patch.pages ?? []).filter((p) => p.extraction === 'unread').length;
       const ocr = (patch.pages ?? []).filter((p) => p.extraction === 'ocr').length;
+      const cached = (patch.documents ?? []).filter((document) => document.extractionPath === 'cached').length;
       return `${(patch.pages ?? []).length} pages lues` +
         (ocr ? `, dont ${ocr} par OCR` : '') +
+        (cached ? ` ; ${cached} document(s) repris du cache` : '') +
         (unread ? `, ${unread} illisibles` : '');
     }
     case 'extractRequirements':
-      return `${(patch.requirements ?? []).length} exigences extraites`;
+      return `${(patch.requirements ?? []).length} exigences extraites` + (patch.extractionAudit
+        ? ` ; ${patch.extractionAudit.auditedPages} pages auditees, ${patch.extractionAudit.recoveredRequirements} omissions ou corrections recuperees` : '');
     case 'classifyRequirements':
       return `${(patch.requirements ?? []).filter((r) => r.obligation === 'eliminatoire').length} exigences eliminatoires identifiees`;
     case 'parseRubric':
@@ -197,7 +238,7 @@ export function summarize(name, patch = {}) {
       );
     }
     case 'compliance':
-      return `${(patch.sections ?? []).length} sections validees, ${(patch.rejected ?? []).length} refusees`;
+      return `${(patch.sections ?? []).filter((s) => !s.needsHuman).length} sections controlees, ${(patch.sections ?? []).filter((s) => s.needsHuman).length} a revoir, ${(patch.rejected ?? []).length} refusees`;
     default:
       return name;
   }
@@ -220,7 +261,7 @@ let checkpointerPromise = null;
  * The Postgres checkpointer, created once per process. A run that dies at node 6
  * resumes instead of restarting an OCR pass from zero - which matters most at
  * exactly the worst moment, during a demo.
- * @returns {Promise<PostgresSaver|undefined>} undefined when unavailable
+ * @returns {Promise<PostgresSaver>} rejects when durable state is unavailable
  */
 export async function getCheckpointer() {
   if (!checkpointerPromise) {
@@ -231,10 +272,8 @@ export async function getCheckpointer() {
         logger.info('graph: postgres checkpointer ready');
         return saver;
       } catch (error) {
-        // Checkpointing is a resilience feature, not a correctness one. Losing it
-        // must not stop dossiers being analysed.
-        logger.warn({ err: error.message }, 'graph: checkpointer unavailable, running without');
-        return undefined;
+        checkpointerPromise = null;
+        throw new Error('Points de reprise indisponibles : ' + error.message);
       }
     })();
   }
@@ -256,6 +295,7 @@ export async function buildGraph({ analyses = new AnalysisRepository(), checkpoi
     .addNode('computeScore', traced('computeScore', score, analyses))
     .addNode('decide', traced('decide', decide, analyses))
     .addNode('draft', traced('draft', draft, analyses))
+    .addNode('reconcileDecision', traced('reconcileDecision', decide, analyses))
     .addNode('compliance', traced('compliance', reviewSections, analyses));
 
   graph.addEdge(START, 'ingest');
@@ -268,7 +308,8 @@ export async function buildGraph({ analyses = new AnalysisRepository(), checkpoi
 
   // Conditional edge 1: no-go never reaches the Writer.
   graph.addConditionalEdges('decide', shouldDraft, { draft: 'draft', [END]: END });
-  graph.addEdge('draft', 'compliance');
+  graph.addEdge('draft', 'reconcileDecision');
+  graph.addConditionalEdges('reconcileDecision', shouldDraft, { draft: 'compliance', [END]: END });
   // Conditional edge 2: a refused section goes back to the Writer, bounded.
   graph.addConditionalEdges('compliance', shouldRedraft, { draft: 'draft', export: END });
 

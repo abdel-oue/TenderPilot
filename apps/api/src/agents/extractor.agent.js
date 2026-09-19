@@ -10,6 +10,9 @@
  * classifier.agent.js.
  */
 import LlmService, { TIERS } from '../services/llm.service.js';
+import { z } from 'zod';
+import { rubricCriterionSchema } from '@tenderpilot/shared';
+import { EXTRACTION_AUDIT_SYSTEM, renderExtractionAudit } from '../prompts/extractor.prompts.js';
 import { EXTRACTOR_SYSTEM, RUBRIC_SYSTEM, renderPages } from '../prompts/extractor.prompts.js';
 import {
   EXTRACTOR_STUB,
@@ -41,19 +44,41 @@ export default class ExtractorAgent {
     });
   }
 
+  /** A bounded second read that also accounts for pages containing no requirements.
+   * @param {object[]} pages @param {object[]} requirements @returns {Promise<object>}
+   */
+  async auditRequirements(pages, requirements) {
+    return this.llm.complete({
+      name: 'extractionAudit',
+      tier: TIERS.VOLUME,
+      system: EXTRACTION_AUDIT_SYSTEM,
+      user: renderExtractionAudit(pages, requirements),
+      schema: extractedRequirementsSchema.extend({
+        reviewedPages: z.array(z.number().int().positive()),
+      }),
+      stub: { requirements, reviewedPages: pages.map((p) => p.page) },
+    });
+  }
+
   /**
    * The grading grid of THIS dossier. Never a hardcoded bareme.
    * @param {{ page: number, text: string, extraction: string }[]} pages
    * @returns {Promise<{ criteria: object[] }>}
    */
   async extractRubric(pages) {
+    const criterionSchema = rubricCriterionSchema.extend({
+      maxPoints: z.number().positive(),
+      sourcePage: z.number().int().positive(),
+      quote: z.string().min(1),
+    });
+
     return this.llm.complete({
       name: 'rubric',
       tier: TIERS.VOLUME,
       system: RUBRIC_SYSTEM,
       user: renderPages(pages),
-      schema: parsedRubricSchema,
-      stub: RUBRIC_STUB,
+      schema: parsedRubricSchema.extend({ criteria: z.array(criterionSchema) }),
+      stub: { criteria: [] },
     });
   }
 }
