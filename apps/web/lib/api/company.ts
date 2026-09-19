@@ -14,7 +14,15 @@ export interface CompanyProfile {
 export interface CompanyBundle {
   profile: CompanyProfile | null;
   references: { id: string; client: string; secteur: string; objet: string }[];
-  team: { id: string; initiales: string; poste: string; anneesExperience: number }[];
+  team: {
+    id: string;
+    initiales: string;
+    poste: string;
+    anneesExperience: number;
+    diplome: string;
+    certifications: string[];
+    langues: string[];
+  }[];
 }
 
 export async function fetchCompany(): Promise<CompanyBundle> {
