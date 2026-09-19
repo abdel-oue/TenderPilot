@@ -10,10 +10,10 @@ PDF déposé
    ▼
 documents (ligne)          upsert sur (owner_id, content_hash), extraction_path = 'pending'
    │
-   ├─ document d'entreprise (tender_id NULL) ──▶ file `index`  ──▶ IndexingService
+   ├─ TOUT dépôt ─────────────────────────────▶ file `index`  ──▶ IndexingService
    │                                                               (ingest + embeddings)
-   └─ document de dossier   (tender_id défini) ─▶ file `analysis` ▶ le graphe
-                                                                    (ingest, puis 8 nœuds)
+   └─ document de dossier (tender_id défini) ──▶ file `analysis` ▶ le graphe
+        quand l'analyse est lancée                                  (ingest, puis 8 nœuds)
 ```
 
 L'extraction n'arrive **jamais** dans le handler HTTP. Un OCR complet, c'est ~35 s ;
@@ -43,10 +43,15 @@ serait une fuite.
 | `tender_id` | Nature | Qui le lit |
 |---|---|---|
 | `NULL` | corpus d'entreprise (attestations, mémoires rendus, profil) | file `index`, à l'upload |
-| défini | pièce d'un dossier (CPS, RC, avis) | le graphe, quand l'analyse est lancée |
+| défini | pièce d'un dossier (CPS, RC, avis) | file `index` à l'upload, **et** le graphe quand l'analyse est lancée |
 
-Un document de dossier n'est **pas** indexé à l'upload : l'analyse va le lire de
-toute façon, et l'indexer ici l'OCRiserait deux fois.
+**Tout dépôt part à l'indexation**, pièce de dossier comprise. Ça a longtemps
+ressemblé à payer l'OCR deux fois, donc les pièces de dossier étaient exclues —
+mais les chunks que l'analyse écrit n'ont pas de vecteur et rien d'autre ne les
+remplissait jamais, si bien que `search_documents(corpus='dossier')` ne pouvait
+renvoyer que zéro ligne, alors que l'outil est annoncé au modèle. Ça ne coûte rien :
+l'extraction est mise en cache sur l'empreinte du contenu, et l'indexeur ne regarde
+que les chunks dont l'`embedding` est encore NULL.
 
 ## 3. Extraction : chaque page, couche texte ou OCR
 
@@ -153,9 +158,11 @@ sur deux pages ne peut plus dire de laquelle il vient.
 Réingérer un document remplace **les chunks de ce document seulement**
 (`deleteChunks(documentId)`), jamais un effacement global.
 
-## 5. Embeddings : seulement le corpus d'entreprise
+## 5. Embeddings : tout ce que le compte possède
 
-`services/indexing.service.js`, déclenché par la file `index`.
+`services/indexing.service.js`, déclenché par la file `index`. `indexCorpus(ownerId)`
+parcourt **tous** les documents du compte — corpus d'entreprise et pièces de
+dossier.
 
 - Ne regarde que les chunks dont `embedding IS NULL` ⇒ **reprise gratuite**, un run
   interrompu repart où il s'est arrêté au lieu de repayer les vecteurs.
@@ -166,8 +173,9 @@ Réingérer un document remplace **les chunks de ce document seulement**
 - Une attestation illisible n'arrête pas les deux mémoires derrière elle : l'échec
   est rapporté dans le résumé, pas avalé.
 
-Les pièces du dossier ne sont **pas** plongées : on ne les cherche pas par
-similarité, on les lit page par page.
+Les pièces du dossier sont plongées elles aussi : le graphe les lit page par page,
+mais `search_documents(corpus='dossier')` a besoin de leurs vecteurs pour retrouver
+où une clause est écrite.
 
 Sans index, `search_documents` ne peut rien renvoyer, et le Writer marque chaque
 section `[A COMPLETER PAR L'HUMAIN]`. Le garde-fou est correct, mais il se

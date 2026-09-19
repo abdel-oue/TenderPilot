@@ -1,24 +1,86 @@
-# TenderPilot
+<div align="center">
+
+# TenderPilot — l'appel d'offres lu, jugé et rédigé
+
+**Déposez le CPS, l'agent rend un go / no-go argumenté.** Chaque exigence extraite
+**cite sa page source**, chaque outil appelé est visible, et le mémoire technique
+arrive à 80 % — l'humain ne fait plus que l'arbitrage.
+
+[Documentation](#-documentation) · [Démarrage](#-démarrage) ·
+[Agent](docs/agents.md) · [Architecture](docs/architecture.md) ·
+[Déploiement](docs/deployment.md)
+
+</div>
+
+---
+
+## Qu'est-ce que TenderPilot ?
 
 Une PME marocaine qui veut répondre à un appel d'offres public doit lire un CPS de
 60 à 100 pages, en extraire les exigences, vérifier qu'elle est éligible, et
 rédiger un mémoire technique. Trois à cinq jours-homme par dossier. La plupart des
 PME ne répondent pas — ou répondent mal et sont écartées sur un vice de forme.
 
-TenderPilot lit le dossier, en extrait chaque exigence **avec sa page source**,
+**TenderPilot** lit le dossier, en extrait chaque exigence avec sa page source,
 confronte le tout au profil de l'entreprise, rend un **go / no-go argumenté**, et
 rédige un brouillon de mémoire technique que l'humain corrige section par section.
-
 L'objectif n'est pas de remplacer le rédacteur, mais de lui livrer un dossier à
 80 % dont il ne fait plus que l'arbitrage.
 
-## Démarrage
+- **Scans compris :** chaque page est lue sans OCR d'abord, seules les pages illisibles passent à l'OCR
+- **Traçable :** chaque exigence cite sa page, un clic ouvre le PDF au bon endroit
+- **Agent visible :** chaque appel d'outil apparaît avec la raison donnée par le modèle
+- **L'agent peut vous interroger :** il suspend l'analyse et pose une question, trois fois au maximum
+- **Une entreprise par compte :** rien n'est partagé, ni équipe ni invitation
+
+---
+
+## 📚 Documentation
+
+**Commencez par [docs/agents.md](docs/agents.md)** — comment l'agent fonctionne.
+
+### Guides
+| Doc | Contenu |
+|---|---|
+| 🤖 [Agent](docs/agents.md) | Le graphe, les outils, les boucles, ce qu'il refuse de faire |
+| 🏗️ [Architecture](docs/architecture.md) | Les cinq services, les couches, le modèle de données |
+| 🔄 [Pipeline](docs/pipeline.md) | Upload, cache, OCR, chunks, embeddings, graphe, export |
+| 🖥️ [Frontend](docs/frontend.md) | Le web : routes, session, TanStack Query, thème |
+| 🔌 [API](docs/api.md) | Tous les endpoints, avec exemples de réponses |
+| ⚖️ [Jugement de l'agent](docs/agent-judgement.md) | Deux correctifs **appliqués** : `compute_deadline` lit l'heure de dépôt, `ask_human` se déclenche sur un arbitrage |
+| 🧪 [Tests](docs/testing.md) | Installation, boucle de développement, lancer et écrire les tests |
+| 🚀 [Déploiement](docs/deployment.md) | Exécution, variables, ports, mise en production derrière nginx, diagnostic |
+| 📐 [Diagrammes](docs/diagrams.md) | Cas d'usage, services, couches, graphe, séquence, extraction, modèle de données, cycle de vie d'un run |
+
+### Références annexes
+| Ressource | Où |
+|---|---|
+| Vhost nginx de l'api (HTTP simple, certbot ajoute le TLS) | [docs/nginx/](docs/nginx/) |
+| Règles de code du dépôt | [CLAUDE.md](CLAUDE.md) |
+| Conventions de l'espace web | [apps/web/CLAUDE.md](apps/web/CLAUDE.md) |
+| Vitrine et pages publiques | [apps/web/LANDING.md](apps/web/LANDING.md) |
+
+---
+
+## 🚀 Démarrage
 
 ```bash
 cp .env.example .env     # remplir les clés modèle
 # déposer le corpus dans apps/api/src/db/seed/data/
 npm run up
 ```
+
+→ interface `http://localhost:4100` · api `http://localhost:4000`
+→ compte de démonstration `demo@tenderpilot.local` / `demo1234`
+
+Sur l'écran de connexion, **Essayer avec des données d'exemple** ouvre un espace
+temporaire sans inscription : un compte jetable (`demo-xxxxxxxx@tenderpilot.local`)
+reçoit une **copie** du compte de démonstration — profil, références, équipe,
+dossiers, documents et leurs vecteurs. Copie et non partage : deux visiteurs ne
+modifient pas les dossiers l'un de l'autre. Les comptes jetables de plus de 24 h
+sont supprimés au passage du visiteur suivant, sans tâche planifiée. La qualité de
+cette copie est celle du compte semé : `npm run db:seed && npm run db:index` une
+fois, et tous les espaces de démonstration suivants héritent d'un corpus indexé.
 
 `npm run up` commence par écrire `docker/.env.local`, une fois : un mot de passe
 Postgres et un `JWT_SECRET` tirés au sort **pour cette installation**. Le fichier
@@ -27,27 +89,27 @@ ne partagent jamais le même mot de passe de base — et aucune ne reprend celui
 la production. `.env` reste le fichier des clés modèle, et c'est le seul que
 `npm run up:vps` lit sur le serveur.
 
-→ interface `http://localhost:4100` · api `http://localhost:4000`
-→ compte de démonstration `demo@tenderpilot.local` / `demo1234`
-
-Le worker indexe le corpus de l'entreprise à son démarrage. Pour le relancer à la
-main (opération idempotente, elle n'embarque que ce qui ne l'est pas encore) :
+Le worker indexe le corpus à son démarrage — **documents d'entreprise et pièces de
+dossier**. Pour le relancer à la main (opération idempotente, elle n'embarque que
+ce qui ne l'est pas encore) :
 
 ```bash
 npm run db:index                       # le compte de démonstration
 npm run db:index -- vous@exemple.com   # un autre compte
 ```
 
+### Ports
+
 Les ports hôte publiés sont des variables (`API_HOST_PORT` 4000, `WEB_HOST_PORT`
 4100, `POSTGRES_HOST_PORT` 5433) et ne sont ouverts que sur `127.0.0.1` : le port
 conteneur, lui, ne bouge pas (api 3000, web 3100). Sur une machine qui fait déjà
 tourner autre chose, changer la variable suffit.
 
-En production les deux moitiés sont séparées : le web est construit et servi par
-**Vercel** sur `tenderpilot.ouedghiri.dev`, et le VPS ne fait tourner que
-l'api, le worker, postgres et redis derrière nginx sur
-`api.tenderpilot.ouedghiri.dev` — vhost versionné dans
-[docs/nginx/](docs/nginx/).
+### Production — deux moitiés séparées
+
+Le web est construit et servi par **Vercel** sur `tenderpilot.ouedghiri.dev`, et le
+VPS ne fait tourner que l'api, le worker, postgres et redis derrière nginx sur
+`api.tenderpilot.ouedghiri.dev` — vhost versionné dans [docs/nginx/](docs/nginx/).
 
 ```bash
 npm run up:vps     # api + worker + postgres + redis, sans le conteneur web
@@ -58,29 +120,75 @@ Les deux hôtes partagent le domaine `ouedghiri.dev`, donc le cookie de session
 reste `SameSite=Lax` : les appels du front vers l'api sont *same-site*. Un front
 sur une URL `*.vercel.app` casserait ça.
 
+### Diagnostic — `migrations failed` (`28P01`)
+
 Postgres ne lit `POSTGRES_PASSWORD` qu'en initialisant un volume vide. Si la
 valeur change ensuite — dans `.env`, ou dans un `docker/.env.local` régénéré —
-Postgres garde l'ancienne et l'api démarre sur `migrations failed` (`28P01`).
-Aligner le rôle, sans toucher aux données :
+Postgres garde l'ancienne et l'api démarre sur `migrations failed`. Aligner le
+rôle, sans toucher aux données :
 
 ```bash
-docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot   -c "ALTER USER tenderpilot WITH PASSWORD '<valeur de .env>'"
+docker exec tenderpilot-postgres-1 psql -U tenderpilot -d tenderpilot \
+  -c "ALTER USER tenderpilot WITH PASSWORD '<valeur de .env>'"
 ```
 
-Détails, variables, mise en production et diagnostic :
-**[docs/deployment.md](docs/deployment.md)**.
+Détails, variables et mise en production : **[docs/deployment.md](docs/deployment.md)**.
 
-## Espace de travail web
+---
 
-- `/login` : connexion (redirection par défaut quand la session expire) ; `/signup` : création de compte et accueil
-  dans le profil entreprise.
+## 🧱 Structure du dépôt
+
+```
+tenderpilot/
+├── apps/
+│   ├── web/           # Next.js 16 + React 19, TypeScript     → docs/frontend.md
+│   └── api/           # Fastify + LangGraph + worker, JS ESM  → docs/architecture.md
+├── packages/shared/   # Schémas zod partagés web ↔ api (JavaScript)
+├── docker/            # Dockerfile unique, compose, init.sql  → docs/deployment.md
+├── docs/              # La documentation, le vhost nginx, les diagrammes
+├── scripts/           # localSecrets.mjs — les secrets par machine
+├── .env.example       # Toutes les clés, valeurs vides
+└── package.json       # Scripts racine : up/down/logs, db:*, test, test:e2e
+```
+
+Détail des dossiers de l'api — `routes/`, `controllers/`, `services/`,
+`repositories/`, `graph/`, `agents/`, `prompts/` — dans [CLAUDE.md](CLAUDE.md).
+
+---
+
+## 🛠️ Commandes courantes
+
+```bash
+npm run up / npm run down    # pile Docker complète (web, api, worker, postgres, redis)
+npm run logs                 # suivre api + worker
+npm run dev:web              # interface locale                      (:3100)
+npm run dev:api              # api locale                            (:3000)
+npm run dev:worker           # worker local
+
+npm test                     # suite complète, sans réseau ni base
+npx vitest run --project web # tests unitaires frontend
+npm run test:e2e             # vitrine, espace de travail et analyse (api simulée)
+npm run test:e2e:workspace -w @tenderpilot/web
+npm run test:e2e:smoke -w @tenderpilot/web   # stack réelle et vrai modèle, hors suite
+
+npm run db:migrate / db:seed / db:index / db:reset
+npm run build                # build de production du web
+```
+
+---
+
+## 🖥️ L'espace de travail web
+
+- `/login` : connexion (redirection par défaut quand la session expire) ; `/signup` :
+  création de compte et accueil dans le profil entreprise.
 - `/dashboard` : compteurs réels, décisions go / no-go, dossiers récents et
   progression des analyses.
 - `/tenders` : recherche, filtres et densité d'affichage ; `/tenders/new` : dépôt
-  PDF avec reprise après une erreur d’envoi, sans recréer le dossier dans la même
+  PDF avec reprise après une erreur d'envoi, sans recréer le dossier dans la même
   session.
 - Barre du haut pleine largeur, d'un bord à l'autre de la fenêtre, en trois zones —
-  fil d'Ariane, logo au centre, **Nouveau dossier** à droite.
+  fil d'Ariane, logo complet au centre — le nom entier, plus la seule icône —,
+  **Nouveau dossier** à droite.
 - Sous elle, un rail flottant à gauche : des boutons en icône seule sur `bg-surface`,
   centrés verticalement, le libellé apparaissant au survol. Menu mobile au clavier
   (tiroir avec les libellés), transitions avec mouvement réduit.
@@ -90,13 +198,17 @@ Détails, variables, mise en production et diagnostic :
 - Chaque liste longue — dossiers, documents, références — porte les mêmes deux
   contrôles : des filtres et un choix **normal / compact**, retenu par liste d'une
   visite à l'autre dans le navigateur.
-- `/dashboard/controle` : **Contrôle**, la page qui affichera le raisonnement de
-  l'IA, les jetons consommés et le temps passé. La trace du graphe ne porte pas
-  encore ces mesures, la page dit ce qu'elle attend plutôt que d'inventer un chiffre.
-- Vitrine : barre de navigation compacte, liens centrés, sélecteur de langue en
-  icône globe avec menu déroulant, et un seul bouton d'action visible, **Connexion**.
+- `/dashboard/controle` : **Contrôle**, toutes les analyses jamais lancées, la plus
+  récente en tête : dossier, statut, heure de lancement, durée, nombre d'étapes et
+  jetons consommés. Une ligne s'ouvre sur le détail — chaque nœud du graphe avec sa
+  durée et les outils qu'il a appelés, les questions posées à l'humain et ce qui a
+  été répondu, puis les **jetons par agent** (appels, entrée, sortie, total, latence
+  moyenne, erreurs) lus dans `llm_usage`. C'est aussi le seul endroit d'où une
+  analyse précédente d'un dossier reste atteignable.
 - `/company` : import du profil depuis un fichier JSON, **vos références**
-  filtrables par secteur, et vos documents de référence filtrables par type.
+  filtrables par secteur, **votre équipe** — les profils CV-01…CV-n avec poste,
+  diplôme, expérience, certifications et langues, filtrables par poste — et vos
+  documents de référence filtrables par type.
 - `/tenders/[id]` : le bouton **Analyser** au centre, seul. Il devient sur place le
   raisonnement de l'agent, puis se replie en une ligne quand le verdict s'affiche.
   Chaque appel d'outil apparaît **au moment où il rend la main**, avec la phrase
@@ -108,35 +220,32 @@ Détails, variables, mise en production et diagnostic :
   consigne, écarter un point bloquant mal jugé ou forcer le verdict. C'est lui qui
   décide quand il en a besoin, trois fois par analyse au maximum. Détail dans
   [docs/agents.md](docs/agents.md).
+- Vitrine : barre de navigation compacte, liens centrés, sélecteur de langue en
+  icône globe avec menu déroulant, et un seul bouton d'action visible, **Connexion**.
 
-Les tests navigateur interceptent les appels API : ils vérifient les interactions
-frontend, sans créer de comptes ni envoyer de documents au service réel.
+### Déposer un dossier
 
-```bash
-npm run dev:web                     # interface locale :3100
-npx vitest run --project web        # tests unitaires frontend
-npm run test:e2e                    # vitrine, espace de travail et analyse
-npm run test:e2e:workspace -w @tenderpilot/web
-npm run test:e2e:smoke -w @tenderpilot/web   # stack réelle et vrai modèle, hors suite
-```
+Les PDF déposés depuis l'interface sont écrits dans `uploads/<utilisateur>/`, sur
+un volume Docker nommé — ils survivent à un `npm run up`. Le nom du fichier stocké
+est l'empreinte de son contenu, ce qui fait que redéposer le même PDF ne crée pas
+de doublon et réutilise le cache d'extraction. Le fichier est validé sur ses octets
+(`%PDF`), pas sur l'en-tête annoncé par le navigateur, et plafonné à
+`MAX_UPLOAD_MB` (25 Mo par défaut).
 
-Les tests navigateur démarrent une instance isolée sur `127.0.0.1:3101` pour ne
-pas tester accidentellement le serveur de développement sur `:3100` ni la pile
-Docker sur `:4100`.
+On ne sait jamais à l'avance si un PDF déposé est un scan. Chaque page est donc
+d'abord lue sans OCR, et **seules celles dont le texte n'est pas exploitable** sont
+rastérisées et passées à l'OCR — un dossier de 60 pages avec cinq annexes scannées
+coûte cinq pages d'OCR, pas soixante, et ces cinq pages cessent d'être invisibles.
+Détail : [docs/pipeline.md](docs/pipeline.md#3-extraction--chaque-page-couche-texte-ou-ocr).
 
-Vérification frontend au 19/09/2026 : **22 tests unitaires passent ; 53 tests
-navigateur passent, 1 test réservé au mobile est ignoré sur desktop**. Le lint et le
-build de production font partie des vérifications de cette interface. Les tests
-navigateur utilisent une API simulée et ne constituent pas un test d’intégration du
-backend réel.
+**Tout dépôt part à l'indexation**, pièce de dossier comprise. Auparavant seuls les
+documents d'entreprise y allaient : les fragments d'un dossier étaient écrits sans
+vecteur et `search_documents(corpus='dossier')` ne pouvait retourner que zéro
+ligne, alors que l'outil est annoncé au rédacteur. L'indexation ne coûte rien de
+plus — l'extraction est mise en cache sur l'empreinte du fichier et l'indexeur ne
+regarde que les fragments dont le vecteur est encore nul.
 
-`e2e/smoke.spec.ts` est le seul à parler à la vraie pile et au vrai modèle : il exige
-un `npm run up` démarré et le corpus semé, n'est dans aucune suite par défaut, et
-n'affirme que des invariants — un verdict existe, chaque exigence cite une page, la
-trace nomme les nœuds qui ont tourné. **Il n'a pas été exécuté ici**, faute de pile
-démarrée.
-
-## Une entreprise par compte
+### Une entreprise par compte
 
 Un compte = une entreprise. Créez un second utilisateur et vous obtenez une
 application vide : ni profil, ni dossiers, ni documents. Rien n'est partagé, et il
@@ -148,23 +257,9 @@ Un nouveau compte commence donc par **Mon entreprise** : importez votre
 rendus. Ce sont eux que le rédacteur fouille pour citer une référence réelle — sans
 eux, chaque section revient marquée `[A COMPLETER PAR L'HUMAIN]`.
 
-## Déposer un dossier
+---
 
-Les PDF déposés depuis l'interface sont écrits dans `uploads/<utilisateur>/`, sur
-un volume Docker nommé — ils survivent à un `npm run up`. Le nom du
-fichier stocké est l'empreinte de son contenu, ce qui fait que redéposer le même
-PDF ne crée pas de doublon et réutilise le cache d'extraction.
-
-Le fichier est validé sur ses octets (`%PDF`), pas sur l'en-tête annoncé par le
-navigateur, et plafonné à `MAX_UPLOAD_MB` (25 Mo par défaut).
-
-On ne sait jamais à l'avance si un PDF déposé est un scan. Chaque page est donc
-d'abord lue sans OCR, et **seules celles dont le texte n'est pas exploitable** sont
-rastérisées et passées à l'OCR — un dossier de 60 pages avec cinq annexes scannées
-coûte cinq pages d'OCR, pas soixante, et ces cinq pages cessent d'être invisibles.
-Détail : [docs/pipeline.md](docs/pipeline.md#3-extraction--chaque-page-couche-texte-ou-ocr).
-
-## Ce que ça fait, concrètement
+## 🔍 Ce que ça fait, concrètement
 
 Sur `AO-2026-004`, qui est un **scan intégral sans couche texte** :
 
@@ -211,22 +306,9 @@ Sur `AO-2026-002`, l'agent rend un **no-go** et dit pourquoi :
 
 Chaque exigence affichée cite sa page ; un clic ouvre le PDF à cette page.
 
-## Documentation
+---
 
-| Document | Contenu |
-|---|---|
-| **[docs/agents.md](docs/agents.md)** | **Comment l'agent fonctionne** — le graphe, les outils, les boucles, ce qu'il refuse de faire. Commencez ici |
-| [docs/architecture.md](docs/architecture.md) | Les cinq services, les couches, le modèle de données |
-| [docs/pipeline.md](docs/pipeline.md) | Le chemin des données : upload, cache, OCR, chunks, embeddings, graphe, export |
-| [docs/frontend.md](docs/frontend.md) | Le web : routes, session, TanStack Query, thème |
-| [docs/api.md](docs/api.md) | Tous les endpoints, avec exemples de réponses |
-| [docs/testing.md](docs/testing.md) | Installation, boucle de développement, lancer et écrire les tests |
-| [docs/deployment.md](docs/deployment.md) | Exécution, variables, ports, mise en production derrière nginx, diagnostic |
-| [docs/nginx/](docs/nginx/) | Le vhost nginx de l'api, à copier dans `sites-available`, en HTTP simple (certbot ajoute le TLS) |
-| [docs/diagrams.md](docs/diagrams.md) | Tous les diagrammes Mermaid : cas d'usage, services, couches, graphe, séquence, extraction, modèle de données |
-| [CLAUDE.md](CLAUDE.md) | Règles de code du dépôt |
-
-## Le graphe, en une image
+## 🧠 Le graphe, en une image
 
 ```mermaid
 stateDiagram-v2
@@ -256,22 +338,23 @@ n'*demande* pas au modèle de s'arrêter, on l'en empêche.
 
 ### La ceinture d'outils
 
-Le **Writer** et le **Matcher** reçoivent 9 outils (10 avec `TAVILY_API_KEY`).
+Le **Writer** et le **Matcher** reçoivent 10 outils (11 avec `TAVILY_API_KEY`).
 Les définitions partent au modèle dans la requête, le modèle choisit ce qu'il
 appelle, `LlmService.runToolLoop` exécute et réinjecte les résultats. Les appels
 sont les siens, pas une recherche codée en dur :
 
-| | |
+| Outil | Ce qu'il fait |
 |---|---|
 | `search_documents` | pgvector, corpus entreprise **ou** dossier |
 | `get_company_facts` | profil / références / équipe / marchés passés, filtrables |
 | `read_source_page` | texte exact d'une page, avec repli OCR |
 | `get_run_state` | étapes, appels, exigences, verdict courant — le « mémoriser » |
 | `check_dossier_checklist` | pièces exigées × documents réellement déposés |
-| `compute_deadline` · `get_current_date` | arithmétique de dates |
+| `compute_deadline` · `get_current_date` | arithmétique de dates — `08/07/2026 à 09h30` est lu tel quel et l'heure est rendue dans `heureLimite` |
 | `calculate` | arithmétique de montants, sans `eval` |
 | `simulate_score` | rejoue le verdict sous hypothèse |
 | `web_search` | Tavily — **absent si aucune clé** |
+| `ask_human` | pose une question au dirigeant et **suspend l'analyse** — trois fois par analyse au maximum |
 
 `compute_deadline`, `get_current_date` et `calculate` existent parce qu'un modèle
 se trompe sur une date ou sur 1,5 % de 2 400 000 **avec assurance**, et qu'un
@@ -284,9 +367,8 @@ la prudence. Détail et arbitrages dans [docs/agents.md](docs/agents.md).
 Les autres diagrammes — cas d'usage, services, couches, séquence d'une analyse,
 extraction page par page, modèle de données — sont dans
 **[docs/diagrams.md](docs/diagrams.md)**, en Mermaid et copiables tels quels.
-Comportement de l'agent : [docs/agents.md](docs/agents.md).
 
-## Les garde-fous
+### Les garde-fous
 
 - **Ne jamais inventer une référence.** Le Writer ne cite que ce que ses outils ont
   renvoyé. Le Compliance recoupe chaque `REF-xx` / `CV-xx` du texte contre les
@@ -306,29 +388,35 @@ Comportement de l'agent : [docs/agents.md](docs/agents.md).
   écarte l'entreprise. « Déposer le pli avant le 12/03 » est une tâche de la
   réponse, pas une preuve d'inéligibilité.
 
-## Stack
+---
 
-Next.js 16 + React 19 (TypeScript) · Node 22 + Fastify (JavaScript ESM) ·
-LangGraph + checkpointer Postgres · PostgreSQL 16 + pgvector · Redis 7 + BullMQ ·
-Zod à chaque frontière · Vitest + Playwright · Docker Compose.
+## 🧪 État des tests
 
-`apps/web` est en TypeScript, `apps/api` en JavaScript : côté api, Zod tient le
-rôle du vérificateur de types, à chaque frontière, sans exception.
+| Suite | Commande | Résultat au 19/09/2026 |
+|---|---|---|
+| Globale (api + web) | `npm test` | **330 tests passent, 0 échoue** (33 fichiers) |
+| Unitaires frontend | `npx vitest run --project web` | **22 tests passent** |
+| Navigateur, api simulée | `npm run test:e2e` | **61 tests passent**, 1 test mobile ignoré sur desktop |
+| Smoke, pile et modèle réels | `npm run test:e2e:smoke -w @tenderpilot/web` | **non exécuté ici**, faute de pile démarrée |
 
-## Tests
+Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`. Les
+tests navigateur interceptent les appels API — ils vérifient les interactions
+frontend, sans créer de comptes ni envoyer de documents au service réel, et ne
+constituent donc pas un test d'intégration du backend. Ils démarrent une instance
+isolée sur `127.0.0.1:3101` pour ne pas tester accidentellement le serveur de
+développement sur `:3100` ni la pile Docker sur `:4100`. Le lint et le build de
+production font partie des vérifications de l'interface.
 
-```bash
-npm test          # sans réseau ni base de données
-```
+Les 15 échecs précédents venaient de doubles de dépôts antérieurs au cloisonnement
+par compte (migration `0004_owner_scoping`) : les tests ont été remis à la
+signature réelle, pas contournés.
 
-Aucun test de la suite par défaut n'appelle un fournisseur : `STUB_LLM=1`.
+`e2e/smoke.spec.ts` est le seul à parler à la vraie pile et au vrai modèle : il
+exige un `npm run up` démarré et le corpus semé, n'est dans aucune suite par
+défaut, et n'affirme que des invariants — un verdict existe, chaque exigence cite
+une page, la trace nomme les nœuds qui ont tourné.
 
-**Dernier passage global documenté au 19/09/2026 : 302 tests passent, 0 échoue**
-(29 fichiers). Les 15 échecs précédents venaient de doubles de dépôts antérieurs
-au cloisonnement par compte (migration `0004_owner_scoping`) : les tests ont été
-remis à la signature réelle, pas contournés. Ce résultat global est distinct des
-vérifications frontend ci-dessus. `npm run test:e2e` lance la vitrine et l'espace
-de travail avec API simulée. Détail dans [docs/testing.md](docs/testing.md).
+Détail dans [docs/testing.md](docs/testing.md).
 
 ### Intégration continue
 
@@ -337,8 +425,40 @@ chaque push et chaque pull request : `npm ci`, `npm run lint`, `npm test`,
 `npm run test:e2e`, `npm run build`. En cas d'échec le rapport Playwright est
 téléversé en artefact.
 
-Le workflow ne déploie rien et **ne lit aucun secret** : le suite de tests pointe
+Le workflow ne déploie rien et **ne lit aucun secret** : la suite de tests pointe
 ses URL externes vers un port mort et force `STUB_LLM=1`, et les tests navigateur
 interceptent l'api. Le déploiement reste manuel — `npm run up:vps` sur le VPS pour
 l'api, l'intégration Git de Vercel pour le web — et ce fichier sert à dire si le
 commit qu'ils ramasseraient est vert.
+
+---
+
+## 🧰 Stack
+
+Next.js 16 + React 19 (TypeScript) · Node 22 + Fastify (JavaScript ESM) ·
+LangGraph + checkpointer Postgres · PostgreSQL 16 + pgvector · Redis 7 + BullMQ ·
+Zod à chaque frontière · Vitest + Playwright · Docker Compose.
+
+`apps/web` est en TypeScript, `apps/api` en JavaScript : côté api, Zod tient le
+rôle du vérificateur de types, à chaque frontière, sans exception. Détail des
+couches et des services : [docs/architecture.md](docs/architecture.md).
+
+---
+
+## 👤 Pour qui
+
+| Profil | Usage |
+|---|---|
+| 🏢 Dirigeant de PME | Sait en une analyse s'il a le droit de répondre, et pourquoi |
+| ✍️ Rédacteur du mémoire | Reçoit un brouillon sourcé section par section, qu'il corrige |
+| 🔎 Évaluateur, relecteur | Remonte de chaque exigence à sa page du CPS en un clic |
+
+---
+
+<div align="center">
+
+> *TenderPilot — le dossier contient déjà la réponse. Encore faut-il l'avoir lu en entier.*
+
+**[Commencer par le fonctionnement de l'agent →](docs/agents.md)**
+
+</div>

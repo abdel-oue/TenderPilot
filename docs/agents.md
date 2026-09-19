@@ -63,7 +63,7 @@ qu'un appel d'outil aurait levé est une faute, pas de la prudence.
 | `get_current_date` | la date du jour | sans lui le modèle raisonne depuis sa date d'entraînement |
 | `simulate_score` | rejoue le verdict sous hypothèse | transforme un no-go en conseil actionnable |
 | `web_search` | Tavily, extraits ou page complète | marchés similaires attribués, contexte acheteur. **Absent si aucune clé** |
-| `ask_human` | pose une question au dirigeant et **suspend l'analyse** | ce que ni le dossier ni le profil ne peuvent trancher : une certification détenue mais non jointe, un arbitrage commercial |
+| `ask_human` | pose une question au dirigeant et **suspend l'analyse** | un arbitrage, pas une information manquante : le fait est établi, la règle ne le tranche pas, et la réponse décide d'un no-go — attestation expirée à la date limite, seuil manqué d'un an, certification déclarée mais non jointe |
 
 Trois outils écartés volontairement : un scraper de marchespublics.gov.ma (HTML
 fragile, casse en démo), une traduction FR/AR (spéculatif tant qu'aucun dossier
@@ -215,7 +215,9 @@ et non dans chaque nœud : ajouter un nœud ne peut pas oublier de tracer.
 [ok] ingest               4 pages lues, dont 4 par OCR          34042ms
 [ok] extractRequirements  11 exigences extraites                13228ms
 [ok] classifyRequirements 8 exigences eliminatoires             10072ms
-[ok] matchProfile         0/11 couvertes par le profil          21990ms
+[ok] parseRubric          grille de notation : 5 criteres        7274ms
+[ok] matchProfile         3/11 couvertes par le profil          21990ms
+[ok] computeScore         score de couverture : 50/100              1ms
 [ok] decide               go - 0 point(s) bloquant(s)               2ms
 [ok] draft                4 sections redigees                   25920ms
 [ok] compliance           4 sections validees, 0 refusees        8785ms

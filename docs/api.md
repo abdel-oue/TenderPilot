@@ -344,6 +344,49 @@ a une porte d'entrée. `POST /auth/signup`, `POST /auth/login`, `POST /auth/logo
 `GET /auth/me`. Session JWT en cookie httpOnly. Compte de démonstration créé par le
 seed : `demo@tenderpilot.local` / `demo1234`.
 
+### `POST /auth/demo`
+
+Sans corps. Crée un compte jetable `demo-xxxxxxxx@tenderpilot.local`, y **copie**
+tout ce que possède le compte semé — profil, références, équipe, dossiers,
+documents et leurs fragments, vecteurs compris — et ouvre la session. Copie plutôt
+que partage : l'application est cloisonnée par propriétaire, donc deux visiteurs
+n'écrivent jamais dans le même espace. Les comptes jetables de plus de 24 h sont
+supprimés à l'appel suivant.
+
+→ `201` avec l'utilisateur, ou `503 DEMO_UNAVAILABLE` si le jeu de données n'a
+jamais été semé.
+
+---
+
+## Contrôle
+
+### `GET /analyses`
+
+Toutes les analyses du compte, la plus récente en tête (50 au plus). Le
+cloisonnement se fait par jointure sur `tenders.owner_id` : `analysis_runs` ne
+porte pas de propriétaire.
+
+```json
+{ "runs": [{ "runId": "…", "tenderId": "…", "reference": "AO-2026-002",
+  "title": "Audit…", "status": "done", "graphVersion": "v1",
+  "startedAt": "…", "finishedAt": "…", "durationMs": 69000, "error": null,
+  "awaiting": false, "steps": 9, "totalTokens": 38210, "calls": 12 }] }
+```
+
+`startedAt` est l'heure de **mise en file**, pas de début d'exécution : c'est le
+temps que la personne a réellement attendu.
+
+### `GET /analyses/:runId`
+
+Une analyse en entier : `nodeTrace` (chaque nœud avec son `ms`, ses appels
+d'outils et les réponses humaines), `usage` (jetons par agent, lus dans
+`llm_usage` et filtrés sur ce run), et le résultat.
+
+`llm_usage` ne porte pas de propriétaire : le contrôle d'appartenance du run est
+donc la seule chose qui sépare la facture en jetons d'un compte de celle d'un
+autre, et il a lieu avant la lecture. Le run d'un autre compte est `404`, pas
+`403`.
+
 ---
 
 ## Dépôt d'un dossier (EX-01)

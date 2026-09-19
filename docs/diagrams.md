@@ -171,9 +171,14 @@ sequenceDiagram
 
   R->>K: job
   K->>P: status=running
+  W->>A: GET /tenders/:id/analysis/stream (SSE)
+  A->>R: SUBSCRIBE run:<runId>
   loop chaque nœud
     K->>L: appel modèle (tier raisonnement ou volume)
     L-->>K: JSON
+    K->>R: PUBLISH run:<runId> (un événement par outil rendu)
+    R-->>A: événement
+    A-->>W: SSE : la ligne d'outil, tout de suite
     K->>P: safeParse ok, append node_trace + llm_usage
   end
   K->>P: analysis_results, status=done
@@ -183,6 +188,31 @@ sequenceDiagram
     A->>P: SELECT run + trace
     A-->>W: trace en cours, puis résultat
   end
+  Note over W,A: le sondage fait foi, le SSE n'est qu'un miroir
+```
+
+Et si l'agent appelle `ask_human` :
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Navigateur
+  participant A as api
+  participant R as redis
+  participant K as worker
+  participant P as postgres
+
+  K->>P: analysis_runs.pending_question
+  K->>R: PUBLISH run:<runId> { type: ask }
+  R-->>A: question
+  A-->>U: SSE : la question et ses options
+  Note over K: interrupt() : le graphe se gare sur son checkpoint,<br/>le job BullMQ se termine normalement
+  K->>P: status=awaiting_human
+  U->>A: POST /analyses/:runId/answer
+  A->>P: entrée `human` dans node_trace
+  A->>R: re-enqueue
+  R->>K: job
+  Note over K,P: reprise avec new Command({ resume }),<br/>le nœud entier est rejoué
 ```
 
 ## 6. Extraction : décision par page
@@ -196,9 +226,9 @@ flowchart LR
     bytes -->|oui| size{"taille ≤ MAX_UPLOAD_MB ?"}
     size -->|non| ko2["413 UPLOAD_TOO_LARGE"]
     size -->|oui| store["uploads/user/sha256.pdf<br/>upsert sur (owner_id, content_hash)"]
+    store --> idx["file <b>index</b><br/>IndexingService<br/><i>tout dépôt</i>"]
     store --> route{"tender_id ?"}
-    route -->|NULL| idx["file <b>index</b><br/>IndexingService"]
-    route -->|défini| ana["file <b>analysis</b><br/>le graphe"]
+    route -->|défini| ana["file <b>analysis</b><br/>le graphe, au lancement<br/>de l'analyse"]
   end
 
   subgraph ING["2 · Extraction — ingest.node.js"]
@@ -323,6 +353,8 @@ stateDiagram-v2
   [*] --> queued: POST /tenders/:id/analyze
   queued --> running: le worker prend le job
   running --> running: nœud en erreur, consigné, le graphe continue
+  running --> awaiting_human: l'agent appelle ask_human
+  awaiting_human --> queued: POST /analyses/:runId/answer
   running --> done: analysis_results écrit
   running --> failed: erreur non rattrapable
   done --> [*]: export .docx
@@ -334,5 +366,10 @@ stateDiagram-v2
   note right of running
     checkpoint Postgres :
     un run mort au nœud 6 reprend
+  end note
+  note right of awaiting_human
+    l'attente est sans limite de temps :
+    le checkpoint est en base.
+    Trois questions par analyse au maximum
   end note
 ```

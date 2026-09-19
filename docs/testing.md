@@ -7,9 +7,16 @@ des tests.
 
 ## État actuel de la suite
 
-Au dernier passage (`npm test`) : **273 tests passent, 0 échoue, sur 25 fichiers**.
+Au dernier passage, le 19/09/2026 :
 
-Les 15 échecs précédents étaient des tests en retard sur le code, pas des
+| Suite | Commande | Résultat |
+|---|---|---|
+| Globale (api + web) | `npm test` | **330 tests passent, 0 échoue**, sur 33 fichiers |
+| Unitaires frontend | `npx vitest run --project web` | **22 tests passent**, sur 5 fichiers |
+| Navigateur, api interceptée | `npm run test:e2e` | **61 tests passent**, 1 ignoré sur desktop (il ne teste que le menu mobile) |
+| Smoke, pile et modèle réels | `npm run test:e2e:smoke -w @tenderpilot/web` | hors suite par défaut, exige `npm run up` |
+
+Les 15 échecs d'une étape antérieure étaient des tests en retard sur le code, pas des
 régressions du produit : trois fichiers doublaient des dépôts dont la signature
 avait changé au cloisonnement par compte (migration `0004_owner_scoping`). Ils
 ont été remis à la signature réelle — `request.user` sur les requêtes factices,
@@ -20,24 +27,27 @@ Ce qui a été ajouté en même temps :
 | Fichier | Ce qu'il couvre |
 |---|---|
 | `tests/services/llm.service.test.js` | la boucle d'outils : exécution, réinjection, bornage, échec du fournisseur, arguments malformés |
-| `tests/services/tools.service.test.js` | les 10 outils, le cloisonnement par propriétaire, et le fait que **tout outil déclaré est réellement dispatché** |
+| `tests/services/tools.service.test.js` | les 11 outils, le cloisonnement par propriétaire, et le fait que **tout outil déclaré est réellement dispatché** |
 | `tests/lib/calc.test.js` | l'arithmétique des montants, et le refus d'évaluer du code |
 | `tests/lib/dates.test.js` | les trois formats de date du corpus, jours ouvrés, dates impossibles |
 | `tests/repositories/analysis.repository.test.js` | une correction humaine n'est jamais écrasée par un brouillon d'agent |
 | `tests/services/score.service.test.js` | l'ordre des points bloquants par gravité |
 | `tests/lib/narration.test.js` | les phrases en français lues par le dirigeant — dont le fait qu'une recherche vide se lit comme vide, même si le modèle prétend le contraire |
 
-`npm run test:e2e` exécute désormais les parcours de la vitrine et de l’espace de
-travail, sur Chromium desktop et mobile. Le serveur Next local utilise le port
-`3101` et les appels API des parcours authentifiés sont interceptés par Playwright.
-Cette suite vérifie le frontend ; elle ne valide pas les services backend réels.
+`npm run test:e2e` exécute les parcours de la vitrine, de l'espace de travail et
+d'une analyse (`landing.spec.ts`, `workspace.spec.ts`, `tenderAnalysis.spec.ts`),
+sur Chromium desktop et mobile. Le serveur Next démarre sur le port `3101` — ni le
+serveur de développement (`:3100`), ni la pile Docker (`:4100`) — et les appels API
+sont interceptés par Playwright. Cette suite vérifie le frontend ; elle ne valide
+pas les services backend réels.
 
-Pour cibler l’espace de travail : `npm run test:e2e:workspace -w @tenderpilot/web`.
-Pour les tests unitaires web : `npx vitest run --project web`.
-Dernière vérification frontend : **13 tests unitaires passent ; 31 tests navigateur
-passent, 1 est ignoré sur desktop car il teste uniquement le menu mobile**.
-La configuration dédiée à la vitrine reste disponible via
-`npm run test:e2e:landing -w @tenderpilot/web` (port `3100`).
+Les configurations ciblées, toutes dans `apps/web` :
+
+| Commande | Ce qu'elle lance |
+|---|---|
+| `npm run test:e2e:workspace -w @tenderpilot/web` | l'espace de travail seul |
+| `npm run test:e2e:landing -w @tenderpilot/web` | la vitrine seule (port `3100`) |
+| `npm run test:e2e:smoke -w @tenderpilot/web` | la vraie pile et le vrai modèle, hors suite par défaut |
 
 ---
 
@@ -66,8 +76,9 @@ cp -r /chemin/vers/corpus/* apps/api/src/db/seed/data/
 npm run up                         # build + migrations + seed
 ```
 
-→ web `http://localhost:3100` · api `http://localhost:3000` ·
-compte `demo@tenderpilot.local` / `demo1234`.
+→ web `http://localhost:4100` · api `http://localhost:4000` ·
+compte `demo@tenderpilot.local` / `demo1234`. Les ports conteneur (web 3100, api
+3000) ne bougent pas ; seuls les ports hôte publiés sont des variables.
 
 ### Hors conteneur
 
@@ -81,8 +92,9 @@ npm test                           # suffit déjà : aucune dépendance externe
 npm run up                         # laisser postgres + redis dans docker
 npm run db:migrate
 npm run db:seed
-npm run db:index                   # plonge le corpus d'entreprise ; sans ça le
-                                   # rédacteur n'a rien à citer
+npm run db:index                   # plonge tout ce que le compte possède, corpus
+                                   # d'entreprise et pièces de dossier ; sans ça
+                                   # le rédacteur n'a rien à citer
 npm run dev:api                    # :3000   (node --watch, aucun build)
 npm run dev:worker                 # le graphe tourne ici, pas dans l'api
 npm run dev:web                    # :3100
@@ -125,18 +137,17 @@ transitivement. Il pose des valeurs délibérément fausses :
 ### End-to-end
 
 ```bash
-npm run test:e2e -w @tenderpilot/web           # à réparer : config squelette
-npm run test:e2e:landing -w @tenderpilot/web   # fonctionne
+npm run test:e2e                               # les trois specs, desktop + mobile
+npm run test:e2e:workspace -w @tenderpilot/web
+npm run test:e2e:landing -w @tenderpilot/web
 ```
 
 Les specs vivent dans `apps/web/e2e/`, `[flow].spec.ts`, jamais à côté de la source.
-Elles tournent contre la pile compose avec le seed appliqué et `STUB_LLM=1`, donc
-elles sont déterministes et ne brûlent pas de quota. `smoke.spec.ts` est la seule à
-avoir le droit de toucher la vraie chaîne : elle est lente et hors du run par
-défaut.
-
-La configuration `landing` démarre son propre serveur (`webServer`) et couvre
-desktop + mobile.
+Chaque configuration démarre son propre serveur Next (`webServer`) et couvre
+desktop + mobile. Les parcours par défaut interceptent l'api : ils sont
+déterministes et ne brûlent pas de quota. `smoke.spec.ts` est le seul à avoir le
+droit de toucher la vraie chaîne — il exige `npm run up` et le corpus semé, il est
+lent, et il est hors du run par défaut.
 
 ---
 
